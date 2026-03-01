@@ -1,0 +1,9 @@
+:root {
+  --font: "Iosevka Term";
+  --unit: 16px;
+  --color-primary-dark: #000000;
+  --color-primary-light: #FFFFFF;
+  --color-secondary-dark: #A68F77;
+  --color-secondary-light: #F0D0AD;
+  --color-tertiary: #98CFEB;
+}
