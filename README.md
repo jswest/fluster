@@ -42,6 +42,31 @@ It is:
 v0: CLI + FastAPI backend (`uv`, baybee!)
 v1: SvelteKit visualization layer (planned)
 
+### What's working (v0)
+
+| Phase | What | Status |
+|-------|------|--------|
+| 0 | Repo skeleton + dependencies | done |
+| 1 | Workspace + project layout | done |
+| 2 | SQLite bootstrap (WAL, JSON1, sqlite-vec) | done |
+| 3 | Core tables (rows, items, artifacts, representations) | done |
+| 4 | Jobs + job_logs | done |
+| 5 | Plan YAML schema (Pydantic) | done |
+| 6 | `ingest_rows` — CSV to rows + items + artifacts | done |
+| 7 | `materialize_items` — extract text, build embedding_text | done |
+| 8 | `embed_items` — sentence-transformers + vec0 storage | done |
+| 9 | `reduce_items` — PCA + UMAP (2D & 8D) | done |
+| 10 | `cluster_items` — HDBSCAN on UMAP-8D | done |
+| 11 | Exemplars — faux-medoid selection per cluster | done |
+| 12 | LLM interface | up next |
+| 13 | `label_clusters` | planned |
+| 14 | `critique_clusters` | planned |
+| 15 | FastAPI server | planned |
+| 16 | CLI orchestration (`fluster run`) | planned |
+| 17 | Export | planned |
+
+110 tests. All passing.
+
 ---
 
 ## Core Philosophy
