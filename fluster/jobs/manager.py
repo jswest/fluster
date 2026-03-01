@@ -9,12 +9,12 @@ def create_job(
     job_type: str,
     input_params: dict | None = None,
 ) -> int:
-    cur = conn.execute(
+    cursor = conn.execute(
         "INSERT INTO jobs (job_type, input_params_json) VALUES (?, ?)",
         (job_type, json.dumps(input_params or {})),
     )
     conn.commit()
-    return cur.lastrowid
+    return cursor.lastrowid
 
 
 def start_job(conn: sqlite3.Connection, job_id: int) -> None:
@@ -113,12 +113,8 @@ def get_job_logs(conn: sqlite3.Connection, job_id: int) -> list[sqlite3.Row]:
     ).fetchall()
 
 
-def list_jobs(
-    conn: sqlite3.Connection,
-    limit: int = 20,
-) -> list[sqlite3.Row]:
-    """Return the most recent jobs, newest first."""
+def list_jobs(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """Return the 20 most recent jobs, newest first."""
     return conn.execute(
-        "SELECT * FROM jobs ORDER BY job_id DESC LIMIT ?",
-        (limit,),
+        "SELECT * FROM jobs ORDER BY job_id DESC LIMIT 20"
     ).fetchall()

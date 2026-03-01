@@ -119,27 +119,6 @@ def test_reduce_is_idempotent(project):
     assert count == 3
 
 
-# --- PCA disabled ---
-
-def test_reduce_pca_disabled(project):
-    pdir, conn = project
-    _setup_items(pdir, conn)
-
-    plan = Plan(reductions=[
-        PCAReduction(enabled=False),
-        UMAPReduction(target_dimensions=2),
-    ])
-
-    summary = reduce_items(conn, plan)
-
-    assert summary["reductions_created"] == 1  # just UMAP 2D
-    assert summary["skipped"] == 1  # PCA disabled
-
-    reductions = conn.execute("SELECT * FROM reductions").fetchall()
-    assert len(reductions) == 1
-    assert reductions[0]["method"] == "umap"
-
-
 # --- UMAP only ---
 
 def test_reduce_umap_only(project):

@@ -33,7 +33,7 @@ def test_default_reductions():
     umap_8d = plan.reductions[2]
 
     assert isinstance(pca, PCAReduction)
-    assert pca.enabled is True
+    assert pca.target_dimensions == 50
 
     assert isinstance(umap_2d, UMAPReduction)
     assert umap_2d.target_dimensions == 2
@@ -55,7 +55,7 @@ def test_default_clustering():
 def test_default_llm():
     plan = Plan()
     assert plan.llm.provider == LLMProvider.openai
-    assert plan.llm.model == "gpt-5-mini"
+    assert plan.llm.model == "gpt-5-nano"
     assert plan.llm.max_llm_calls == 200
 
 

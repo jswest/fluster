@@ -54,12 +54,12 @@ def embed_items(
         vectors = model.encode(texts, normalize_embeddings=True)
 
         for rep, vector in zip(batch, vectors):
-            cur = conn.execute(
+            cursor = conn.execute(
                 "INSERT INTO embeddings (representation_id, model_name, dimensions) "
                 "VALUES (?, ?, ?)",
                 (rep["representation_id"], model_name, dimensions),
             )
-            embedding_id = cur.lastrowid
+            embedding_id = cursor.lastrowid
 
             conn.execute(
                 "INSERT INTO vec_embeddings (embedding_id, vector) VALUES (?, ?)",

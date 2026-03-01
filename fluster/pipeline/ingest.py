@@ -12,11 +12,11 @@ _SPECIAL_COLS = {"name", "file_path"}
 
 
 def _sha256_file(path: Path) -> str:
-    h = hashlib.sha256()
+    hasher = hashlib.sha256()
     with open(path, "rb") as f:
         for chunk in iter(lambda: f.read(8192), b""):
-            h.update(chunk)
-    return h.hexdigest()
+            hasher.update(chunk)
+    return hasher.hexdigest()
 
 
 def _store_artifact(
@@ -26,18 +26,18 @@ def _store_artifact(
 
     Returns (sha256, stored_path_relative, mime_type, file_bytes).
     """
-    sha = _sha256_file(file_path)
+    file_hash = _sha256_file(file_path)
     mime, _ = mimetypes.guess_type(str(file_path))
-    ext = file_path.suffix or ""
-    dest_dir = artifacts_dir / sha[:2]
+    extension = file_path.suffix or ""
+    dest_dir = artifacts_dir / file_hash[:2]
     dest_dir.mkdir(parents=True, exist_ok=True)
-    dest = dest_dir / f"{sha}{ext}"
+    dest = dest_dir / f"{file_hash}{extension}"
 
     if not dest.exists():
         shutil.copy2(file_path, dest)
 
-    stored_relative = f"{sha[:2]}/{sha}{ext}"
-    return sha, stored_relative, mime, file_path.stat().st_size
+    stored_relative = f"{file_hash[:2]}/{file_hash}{extension}"
+    return file_hash, stored_relative, mime, file_path.stat().st_size
 
 
 def _resolve_file(value: str, csv_dir: Path) -> Path | None:
@@ -89,18 +89,18 @@ def ingest_rows(
                 k: v for k, v in csv_row.items() if k not in _SPECIAL_COLS
             }
 
-            cur = conn.execute(
+            cursor = conn.execute(
                 "INSERT INTO rows (row_name, row_metadata_json, source_row_number) "
                 "VALUES (?, ?, ?)",
                 (row_name, json.dumps(metadata), row_number),
             )
-            row_id = cur.lastrowid
+            row_id = cursor.lastrowid
             rows_created += 1
 
-            cur = conn.execute(
+            cursor = conn.execute(
                 "INSERT INTO items (row_id) VALUES (?)", (row_id,)
             )
-            item_id = cur.lastrowid
+            item_id = cursor.lastrowid
             items_created += 1
 
             # Resolve the file_path column for artifact ingestion.
@@ -112,7 +112,7 @@ def ingest_rows(
                         f"Row {row_number}: file_path '{file_value}' not found"
                     )
 
-                sha, stored_path, mime_type, file_bytes = _store_artifact(
+                file_hash, stored_path, mime_type, file_bytes = _store_artifact(
                     file_path, artifacts_dir
                 )
 
@@ -120,13 +120,13 @@ def ingest_rows(
                     "INSERT OR IGNORE INTO artifacts "
                     "(artifact_id, original_path, stored_path, mime_type, bytes) "
                     "VALUES (?, ?, ?, ?, ?)",
-                    (sha, str(file_path), stored_path, mime_type, file_bytes),
+                    (file_hash, str(file_path), stored_path, mime_type, file_bytes),
                 )
 
                 conn.execute(
                     "INSERT OR IGNORE INTO item_artifacts (item_id, artifact_id, role) "
                     "VALUES (?, ?, ?)",
-                    (item_id, sha, "source"),
+                    (item_id, file_hash, "source"),
                 )
                 artifacts_linked += 1
 

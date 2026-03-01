@@ -104,12 +104,12 @@ def cluster_items(
         labels = clusterer.labels_
         probabilities = clusterer.probabilities_
 
-        cur = conn.execute(
+        cursor = conn.execute(
             "INSERT INTO cluster_runs "
             "(reduction_id, method, params_json) VALUES (?, ?, ?)",
             (reduction_id, cluster_config.method, json.dumps(params, sort_keys=True)),
         )
-        cluster_run_id = cur.lastrowid
+        cluster_run_id = cursor.lastrowid
 
         conn.executemany(
             "INSERT INTO cluster_assignments "

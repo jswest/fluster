@@ -5,13 +5,18 @@ import json
 import sqlite3
 from pathlib import Path
 
+from loguru import logger
+
 
 def _extract_text(stored_path: str, project_dir: Path) -> str:
     """Extract text content from a stored artifact. Text files only for v0."""
     full_path = project_dir / "artifacts" / stored_path
     try:
         return full_path.read_text(encoding="utf-8")
-    except (UnicodeDecodeError, FileNotFoundError):
+    except FileNotFoundError:
+        logger.warning(f"Artifact not found: {full_path}")
+        return ""
+    except UnicodeDecodeError:
         return ""
 
 
@@ -75,8 +80,8 @@ def materialize_items(
 
         # Extract text from all artifacts.
         extracted_parts = []
-        for art in artifacts:
-            text = _extract_text(art["stored_path"], project_dir)
+        for artifact in artifacts:
+            text = _extract_text(artifact["stored_path"], project_dir)
             if text.strip():
                 extracted_parts.append(text.strip())
 

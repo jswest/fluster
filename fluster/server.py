@@ -235,11 +235,11 @@ def get_cluster_run(
     ).fetchall()
     labels = [
         ClusterSummary(
-            cluster_id=l["cluster_id"],
-            label=l["label"],
-            label_json=json.loads(l["label_json"]),
+            cluster_id=label_row["cluster_id"],
+            label=label_row["label"],
+            label_json=json.loads(label_row["label_json"]),
         )
-        for l in label_rows
+        for label_row in label_rows
     ]
 
     critique_row = conn.execute(

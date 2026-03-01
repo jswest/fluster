@@ -37,7 +37,7 @@ def _get_all_cluster_run_ids(conn: sqlite3.Connection) -> list[int]:
 
 def run_pipeline(
     conn: sqlite3.Connection,
-    pdir: Path,
+    project_path: Path,
     plan: Plan,
     job_id: int,
 ) -> dict:
@@ -60,7 +60,7 @@ def run_pipeline(
 
     # Step 1: materialize
     log_job(conn, job_id, "Starting materialize_items")
-    result = materialize_items(conn, pdir)
+    result = materialize_items(conn, project_path)
     log_job(conn, job_id, "materialize_items complete", payload=result)
     _step("materialize")
     _check_cancel(conn, job_id)
@@ -90,22 +90,22 @@ def run_pipeline(
     _check_cancel(conn, job_id)
 
     # Steps 5-7: per cluster_run
-    for crid in cluster_run_ids:
-        log_job(conn, job_id, f"Starting select_exemplars for cluster_run {crid}")
-        result = select_exemplars(conn, crid)
-        log_job(conn, job_id, f"select_exemplars complete for cluster_run {crid}", payload=result)
+    for cluster_run_id in cluster_run_ids:
+        log_job(conn, job_id, f"Starting select_exemplars for cluster_run {cluster_run_id}")
+        result = select_exemplars(conn, cluster_run_id)
+        log_job(conn, job_id, f"select_exemplars complete for cluster_run {cluster_run_id}", payload=result)
         _step("exemplars")
         _check_cancel(conn, job_id)
 
-        log_job(conn, job_id, f"Starting label_clusters for cluster_run {crid}")
-        result = label_clusters(conn, crid, plan.llm, job_id=job_id)
-        log_job(conn, job_id, f"label_clusters complete for cluster_run {crid}", payload=result)
+        log_job(conn, job_id, f"Starting label_clusters for cluster_run {cluster_run_id}")
+        result = label_clusters(conn, cluster_run_id, plan.llm, job_id=job_id)
+        log_job(conn, job_id, f"label_clusters complete for cluster_run {cluster_run_id}", payload=result)
         _step("label")
         _check_cancel(conn, job_id)
 
-        log_job(conn, job_id, f"Starting critique_clusters for cluster_run {crid}")
-        result = critique_clusters(conn, crid, plan.llm, job_id=job_id)
-        log_job(conn, job_id, f"critique_clusters complete for cluster_run {crid}", payload=result)
+        log_job(conn, job_id, f"Starting critique_clusters for cluster_run {cluster_run_id}")
+        result = critique_clusters(conn, cluster_run_id, plan.llm, job_id=job_id)
+        log_job(conn, job_id, f"critique_clusters complete for cluster_run {cluster_run_id}", payload=result)
         _step("critique")
         _check_cancel(conn, job_id)
 

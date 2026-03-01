@@ -1,6 +1,7 @@
 """fluster CLI — powered by Typer."""
 
 import json
+from contextlib import contextmanager
 from pathlib import Path
 
 import typer
@@ -30,6 +31,24 @@ from fluster.pipeline.run import PipelineCancelled, run_pipeline
 
 console = Console()
 
+
+@contextmanager
+def _open_project(project_name: str):
+    """Validate a project exists, then yield (project_path, connection).
+
+    Closes the connection on exit.
+    """
+    if not project_exists(project_name):
+        logger.error(f"Project '{project_name}' does not exist.")
+        raise typer.Exit(code=1)
+    project_path = project_dir(project_name)
+    conn = connect(project_path)
+    try:
+        yield project_path, conn
+    finally:
+        conn.close()
+
+
 app = typer.Typer(
     name="fluster",
     help="Clustering for confused data. Structure, with receipts.",
@@ -57,11 +76,11 @@ def _main(
 def init(project_name: str = typer.Argument(help="Name for the new project.")):
     """Create a new fluster project."""
     try:
-        pdir = create_project(project_name)
+        project_path = create_project(project_name)
     except FileExistsError:
         logger.error(f"Project '{project_name}' already exists.")
         raise typer.Exit(code=1)
-    logger.info(f"Created project '{project_name}' at {pdir}")
+    logger.info(f"Created project '{project_name}' at {project_path}")
 
 
 @app.command(name="ingest-rows")
@@ -70,32 +89,18 @@ def ingest_rows_cmd(
     csv_path: Path = typer.Argument(help="Path to the CSV file.", exists=True),
 ):
     """Ingest rows from a CSV file into a project."""
-    if not project_exists(project_name):
-        logger.error(f"Project '{project_name}' does not exist.")
-        raise typer.Exit(code=1)
-
-    pdir = project_dir(project_name)
-    conn = connect(pdir)
-    try:
-        summary = ingest_rows(conn, csv_path, pdir)
+    with _open_project(project_name) as (project_path, conn):
+        summary = ingest_rows(conn, csv_path, project_path)
         logger.info(
             f"Done: {summary['rows_created']} rows, "
             f"{summary['artifacts_linked']} artifacts linked"
         )
-    finally:
-        conn.close()
 
 
 @app.command()
 def run(project_name: str = typer.Argument(help="Project to run the full pipeline on.")):
     """Run the full clustering pipeline."""
-    if not project_exists(project_name):
-        logger.error(f"Project '{project_name}' does not exist.")
-        raise typer.Exit(code=1)
-
-    pdir = project_dir(project_name)
-    conn = connect(pdir)
-    try:
+    with _open_project(project_name) as (project_path, conn):
         active = get_active_job(conn)
         if active:
             logger.error(
@@ -104,13 +109,13 @@ def run(project_name: str = typer.Argument(help="Project to run the full pipelin
             )
             raise typer.Exit(code=1)
 
-        plan = load_plan(pdir / settings.PLAN_YAML)
+        plan = load_plan(project_path / settings.PLAN_YAML)
         job_id = create_job(conn, "full_run")
         start_job(conn, job_id)
         logger.info(f"Started job {job_id} for project '{project_name}'")
 
         try:
-            summary = run_pipeline(conn, pdir, plan, job_id)
+            summary = run_pipeline(conn, project_path, plan, job_id)
             succeed_job(conn, job_id)
             logger.info(f"Job {job_id} succeeded: {summary}")
         except PipelineCancelled:
@@ -120,20 +125,12 @@ def run(project_name: str = typer.Argument(help="Project to run the full pipelin
             fail_job(conn, job_id, str(exc))
             logger.error(f"Job {job_id} failed: {exc}")
             raise typer.Exit(code=1)
-    finally:
-        conn.close()
 
 
 @app.command()
 def jobs(project_name: str = typer.Argument(help="Project to list jobs for.")):
     """List recent jobs for a project."""
-    if not project_exists(project_name):
-        logger.error(f"Project '{project_name}' does not exist.")
-        raise typer.Exit(code=1)
-
-    pdir = project_dir(project_name)
-    conn = connect(pdir)
-    try:
+    with _open_project(project_name) as (_project_path, conn):
         rows = list_jobs(conn)
         if not rows:
             console.print("[dim]No jobs found.[/dim]")
@@ -164,8 +161,6 @@ def jobs(project_name: str = typer.Argument(help="Project to list jobs for.")):
                 (row["error_message"] or "")[:60],
             )
         console.print(table)
-    finally:
-        conn.close()
 
 
 @app.command()
@@ -174,13 +169,7 @@ def job(
     job_id: int = typer.Argument(help="Job ID to inspect."),
 ):
     """Show details for a single job."""
-    if not project_exists(project_name):
-        logger.error(f"Project '{project_name}' does not exist.")
-        raise typer.Exit(code=1)
-
-    pdir = project_dir(project_name)
-    conn = connect(pdir)
-    try:
+    with _open_project(project_name) as (_project_path, conn):
         row = get_job(conn, job_id)
         if row is None:
             logger.error(f"Job {job_id} not found.")
@@ -202,16 +191,14 @@ def job(
         logs = get_job_logs(conn, job_id)
         if logs:
             console.print(f"\n[bold]Logs ({len(logs)} entries):[/bold]")
-            for log in logs:
-                level_style = {"error": "red", "warning": "yellow"}.get(log["level"], "")
-                msg = log["message"]
-                ts = log["created_at"]
+            for log_entry in logs:
+                level_style = {"error": "red", "warning": "yellow"}.get(log_entry["level"], "")
+                message = log_entry["message"]
+                timestamp = log_entry["created_at"]
                 if level_style:
-                    console.print(f"  [{level_style}]{ts} [{log['level']}] {msg}[/{level_style}]")
+                    console.print(f"  [{level_style}]{timestamp} [{log_entry['level']}] {message}[/{level_style}]")
                 else:
-                    console.print(f"  {ts} [{log['level']}] {msg}")
-    finally:
-        conn.close()
+                    console.print(f"  {timestamp} [{log_entry['level']}] {message}")
 
 
 @app.command()
@@ -220,13 +207,7 @@ def cancel(
     job_id: int = typer.Argument(help="Job ID to cancel."),
 ):
     """Request cancellation of a running job."""
-    if not project_exists(project_name):
-        logger.error(f"Project '{project_name}' does not exist.")
-        raise typer.Exit(code=1)
-
-    pdir = project_dir(project_name)
-    conn = connect(pdir)
-    try:
+    with _open_project(project_name) as (_project_path, conn):
         row = get_job(conn, job_id)
         if row is None:
             logger.error(f"Job {job_id} not found.")
@@ -238,8 +219,6 @@ def cancel(
 
         request_cancel(conn, job_id)
         logger.info(f"Cancellation requested for job {job_id}.")
-    finally:
-        conn.close()
 
 
 @app.command()
@@ -249,24 +228,17 @@ def export(
     output: Path | None = typer.Option(None, "--output", "-o", help="Output file path. Defaults to stdout."),
 ):
     """Export a cluster run's results to CSV."""
-    if not project_exists(project_name):
-        logger.error(f"Project '{project_name}' does not exist.")
-        raise typer.Exit(code=1)
-
-    pdir = project_dir(project_name)
-    conn = connect(pdir)
-    try:
-        csv_text = export_cluster_run(conn, cluster_run)
-        if output:
-            output.write_text(csv_text)
-            logger.info(f"Exported to {output}")
-        else:
-            typer.echo(csv_text, nl=False)
-    except ValueError as exc:
-        logger.error(str(exc))
-        raise typer.Exit(code=1)
-    finally:
-        conn.close()
+    with _open_project(project_name) as (_project_path, conn):
+        try:
+            csv_text = export_cluster_run(conn, cluster_run)
+            if output:
+                output.write_text(csv_text)
+                logger.info(f"Exported to {output}")
+            else:
+                typer.echo(csv_text, nl=False)
+        except ValueError as exc:
+            logger.error(str(exc))
+            raise typer.Exit(code=1)
 
 
 @app.command()

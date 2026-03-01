@@ -1,4 +1,4 @@
-"""Export cluster run results (Phase 17)."""
+"""Export cluster run results to CSV."""
 
 import csv
 import io
@@ -67,8 +67,8 @@ def export_cluster_run(
     umap2_id = _get_umap2_reduction_id(conn, cluster_run_id)
     rows = conn.execute(_EXPORT_SQL, (umap2_id, cluster_run_id)).fetchall()
 
-    buf = io.StringIO()
-    writer = csv.writer(buf)
+    output_buffer = io.StringIO()
+    writer = csv.writer(output_buffer)
     writer.writerow(EXPORT_HEADERS)
 
     for row in rows:
@@ -84,4 +84,4 @@ def export_cluster_run(
         ])
 
     logger.info(f"Exported {len(rows)} rows from cluster run {cluster_run_id}")
-    return buf.getvalue()
+    return output_buffer.getvalue()

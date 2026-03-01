@@ -61,15 +61,15 @@ def _compute_metrics(
             "silhouette": None,
         }
 
-    labels = [a["cluster_id"] for a in assignments]
-    noise_count = sum(1 for l in labels if l == -1)
-    non_noise_labels = [l for l in labels if l >= 0]
-    n_clusters = len(set(non_noise_labels))
+    cluster_ids = [a["cluster_id"] for a in assignments]
+    noise_count = sum(1 for cluster_id in cluster_ids if cluster_id == -1)
+    non_noise_cluster_ids = [cluster_id for cluster_id in cluster_ids if cluster_id >= 0]
+    n_clusters = len(set(non_noise_cluster_ids))
 
     # Cluster size distribution (non-noise only).
     sizes: dict[int, int] = {}
-    for l in non_noise_labels:
-        sizes[l] = sizes.get(l, 0) + 1
+    for cluster_id in non_noise_cluster_ids:
+        sizes[cluster_id] = sizes.get(cluster_id, 0) + 1
     size_values = list(sizes.values()) if sizes else [0]
 
     metrics: dict = {
@@ -83,7 +83,7 @@ def _compute_metrics(
     }
 
     # Silhouette score requires >= 2 clusters and >= 2 non-noise items.
-    if n_clusters >= 2 and len(non_noise_labels) >= 2:
+    if n_clusters >= 2 and len(non_noise_cluster_ids) >= 2:
         # Load the reduction coordinates used for this cluster run.
         run = conn.execute(
             "SELECT reduction_id FROM cluster_runs WHERE cluster_run_id = ?",
@@ -92,12 +92,12 @@ def _compute_metrics(
         item_ids, coords = load_coordinates(conn, run["reduction_id"])
 
         # Build arrays aligned to non-noise assignments only.
-        id_to_idx = {iid: i for i, iid in enumerate(item_ids)}
+        item_id_to_index = {item_id: index for index, item_id in enumerate(item_ids)}
         non_noise_coords = []
         non_noise_cluster_labels = []
         for a in assignments:
-            if a["cluster_id"] >= 0 and a["item_id"] in id_to_idx:
-                non_noise_coords.append(coords[id_to_idx[a["item_id"]]])
+            if a["cluster_id"] >= 0 and a["item_id"] in item_id_to_index:
+                non_noise_coords.append(coords[item_id_to_index[a["item_id"]]])
                 non_noise_cluster_labels.append(a["cluster_id"])
 
         if len(set(non_noise_cluster_labels)) >= 2:

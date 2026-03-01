@@ -43,7 +43,7 @@ def _select_for_cluster(
     3. Score each candidate by avg cosine similarity to all cluster members
     4. Return top K as (item_id, rank, score)
     """
-    member_vecs = np.array([vectors[mid] for mid in member_ids], dtype=np.float32)
+    member_vecs = np.array([vectors[member_id] for member_id in member_ids], dtype=np.float32)
     centroid = member_vecs.mean(axis=0)
 
     # Cosine similarity to centroid for all members.
@@ -51,9 +51,9 @@ def _select_for_cluster(
     member_norms = member_vecs / (np.linalg.norm(member_vecs, axis=1, keepdims=True) + 1e-10)
     centroid_sims = member_norms @ centroid_norm
 
-    # Pick top C candidates nearest to centroid.
-    c = min(n_candidates, len(member_ids))
-    candidate_indices = np.argsort(-centroid_sims)[:c]
+    # Pick top N candidates nearest to centroid.
+    candidate_count = min(n_candidates, len(member_ids))
+    candidate_indices = np.argsort(-centroid_sims)[:candidate_count]
 
     # Score each candidate by avg similarity to all cluster members.
     scores = []
@@ -65,9 +65,9 @@ def _select_for_cluster(
 
     # Sort by score descending, take top K.
     scores.sort(key=lambda x: -x[1])
-    k = min(top_k, len(scores))
+    selection_count = min(top_k, len(scores))
 
-    return [(item_id, rank + 1, score) for rank, (item_id, score) in enumerate(scores[:k])]
+    return [(item_id, rank + 1, score) for rank, (item_id, score) in enumerate(scores[:selection_count])]
 
 
 def select_exemplars(

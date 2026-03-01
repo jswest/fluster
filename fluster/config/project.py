@@ -36,21 +36,21 @@ def create_project(project_name: str) -> Path:
     Raises FileExistsError if the project already exists.
     """
     ensure_workspace()
-    pdir = project_dir(project_name)
+    project_path = project_dir(project_name)
 
     if project_exists(project_name):
-        raise FileExistsError(f"Project '{project_name}' already exists at {pdir}")
+        raise FileExistsError(f"Project '{project_name}' already exists at {project_path}")
 
-    pdir.mkdir(parents=True)
-    (pdir / settings.ARTIFACTS_DIR).mkdir()
+    project_path.mkdir(parents=True)
+    (project_path / settings.ARTIFACTS_DIR).mkdir()
 
     # project.yaml
     project_meta = {"name": project_name}
-    (pdir / settings.PROJECT_YAML).write_text(
+    (project_path / settings.PROJECT_YAML).write_text(
         yaml.dump(project_meta, default_flow_style=False)
     )
 
     # plan.yaml
-    save_plan(Plan(), pdir / settings.PLAN_YAML)
+    save_plan(Plan(), project_path / settings.PLAN_YAML)
 
-    return pdir
+    return project_path

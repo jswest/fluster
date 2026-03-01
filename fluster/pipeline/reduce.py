@@ -3,6 +3,7 @@
 import json
 import sqlite3
 import struct
+import warnings
 
 import numpy as np
 from sklearn.decomposition import PCA
@@ -39,9 +40,9 @@ def load_embedding_vectors(conn: sqlite3.Connection) -> tuple[list[int], np.ndar
 
     item_ids = [r["item_id"] for r in rows]
     first_vec = rows[0]["vector"]
-    dims = len(first_vec) // 4  # float32
+    dimensions = len(first_vec) // 4  # 4 bytes per float32
     vectors = np.array(
-        [struct.unpack(f"{dims}f", r["vector"]) for r in rows],
+        [struct.unpack(f"{dimensions}f", r["vector"]) for r in rows],
         dtype=np.float32,
     )
     return item_ids, vectors
@@ -69,13 +70,13 @@ def _store_reduction(
     coordinates: np.ndarray,
 ) -> int:
     """Insert a reduction and its coordinates into the database."""
-    cur = conn.execute(
+    cursor = conn.execute(
         "INSERT INTO reductions "
         "(embedding_reference, method, target_dimensions, params_json) "
         "VALUES (?, ?, ?, ?)",
         (model_name, method, target_dims, json.dumps(params)),
     )
-    reduction_id = cur.lastrowid
+    reduction_id = cursor.lastrowid
 
     conn.executemany(
         "INSERT INTO reduction_coordinates "
@@ -119,10 +120,6 @@ def reduce_items(
 
     for reduction_config in plan.reductions:
         if isinstance(reduction_config, PCAReduction):
-            if not reduction_config.enabled:
-                skipped += 1
-                continue
-
             target = min(
                 reduction_config.target_dimensions,
                 working.shape[0],
@@ -131,7 +128,7 @@ def reduce_items(
 
             if _reduction_exists(conn, model_name, "pca", target):
                 # Load stored PCA coordinates as the working matrix for UMAP.
-                rid = conn.execute(
+                reduction_id = conn.execute(
                     "SELECT reduction_id FROM reductions "
                     "WHERE embedding_reference = ? AND method = 'pca' "
                     "AND target_dimensions = ?",
@@ -140,7 +137,7 @@ def reduce_items(
                 stored = conn.execute(
                     "SELECT coordinates_json FROM reduction_coordinates "
                     "WHERE reduction_id = ? ORDER BY item_id",
-                    (rid,),
+                    (reduction_id,),
                 ).fetchall()
                 working = np.array(
                     [json.loads(r["coordinates_json"]) for r in stored],
@@ -180,7 +177,11 @@ def reduce_items(
                 random_state=random_state,
                 init=init,
             )
-            coords = reducer.fit_transform(working)
+            # UMAP warns that n_jobs is overridden to 1 when random_state is
+            # set — that's intentional for reproducibility, so suppress it.
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", message="n_jobs value")
+                coords = reducer.fit_transform(working)
 
             _store_reduction(
                 conn, model_name, "umap", target,
