@@ -1,3 +1,35 @@
+@font-face {
+  font-family: "Iosevka Term";
+  src: url("/fonts/iosevka/IosevkaTerm-Regular.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Iosevka Term";
+  src: url("/fonts/iosevka/IosevkaTerm-Italic.woff2") format("woff2");
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Iosevka Term";
+  src: url("/fonts/iosevka/IosevkaTerm-Bold.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Iosevka Term";
+  src: url("/fonts/iosevka/IosevkaTerm-BoldItalic.woff2") format("woff2");
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+}
+
 :root {
   --font: "Iosevka Term", "Fira Code", "JetBrains Mono", monospace;
   --unit: 16px;
