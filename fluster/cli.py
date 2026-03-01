@@ -1,10 +1,14 @@
 """fluster CLI — powered by Typer."""
 
+from pathlib import Path
+
 import typer
 from loguru import logger
 
 from fluster import __version__
-from fluster.config.project import create_project
+from fluster.config.project import create_project, project_dir, project_exists
+from fluster.db.connection import connect
+from fluster.pipeline.ingest import ingest_rows
 
 app = typer.Typer(
     name="fluster",
@@ -38,6 +42,28 @@ def init(project_name: str = typer.Argument(help="Name for the new project.")):
         logger.error(f"Project '{project_name}' already exists.")
         raise typer.Exit(code=1)
     logger.info(f"Created project '{project_name}' at {pdir}")
+
+
+@app.command(name="ingest-rows")
+def ingest_rows_cmd(
+    project_name: str = typer.Argument(help="Project to ingest into."),
+    csv_path: Path = typer.Argument(help="Path to the CSV file.", exists=True),
+):
+    """Ingest rows from a CSV file into a project."""
+    if not project_exists(project_name):
+        logger.error(f"Project '{project_name}' does not exist.")
+        raise typer.Exit(code=1)
+
+    pdir = project_dir(project_name)
+    conn = connect(pdir)
+    try:
+        summary = ingest_rows(conn, csv_path, pdir)
+        logger.info(
+            f"Done: {summary['rows_created']} rows, "
+            f"{summary['artifacts_linked']} artifacts linked"
+        )
+    finally:
+        conn.close()
 
 
 def main():
