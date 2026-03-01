@@ -84,3 +84,51 @@ fluster init project-foo
 fluster ingest-rows project-foo data.csv
 fluster run project-foo
 ```
+
+---
+
+## Development
+
+`fluster` uses [uv](https://docs.astral.sh/uv/) for package management. No virtualenv dance required.
+
+```bash
+# Install dependencies (including dev)
+uv sync
+
+# Run the full test suite
+uv run pytest
+
+# Run a specific test file
+uv run pytest tests/test_server.py -v
+
+# Run tests matching a keyword
+uv run pytest -k "cluster" -v
+```
+
+### Project layout
+
+```
+fluster/
+├── cli.py              # Typer CLI (init, ingest-rows, serve)
+├── server.py           # FastAPI server (create_app factory)
+├── config/             # Plan YAML schema, project layout, settings
+├── db/                 # SQLite connection + schema
+├── jobs/               # Job lifecycle management
+├── llm/                # LLM interface (OpenAI, Ollama)
+├── pipeline/           # The pipeline stages (ingest → critique)
+└── util/               # Shared utilities
+```
+
+### Starting the dev server
+
+```bash
+fluster serve my-project --port 8000
+```
+
+### Database
+
+Everything lives in `~/.fluster/projects/<name>/project.db` — a single SQLite file with WAL mode, JSON1, and sqlite-vec loaded. You can inspect it directly:
+
+```bash
+sqlite3 ~/.fluster/projects/my-project/project.db ".tables"
+```
