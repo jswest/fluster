@@ -1,5 +1,5 @@
 :root {
-  --font: "Iosevka Term";
+  --font: "Iosevka Term", "Fira Code", "JetBrains Mono", monospace;
   --unit: 16px;
   --color-primary-dark: #000000;
   --color-primary-light: #FFFFFF;
@@ -7,4 +7,87 @@
   --color-secondary-light: #F0D0AD;
   --color-tertiary: #98CFEB;
   --color-tertiary-invert: #EB98CF;
+  --color-success: #77A68F;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-family: var(--font);
+  font-size: var(--unit);
+  color: var(--color-primary-dark);
+  background: var(--color-primary-light);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+h1 { font-size: 2rem; font-weight: 700; margin: 0 0 0.5rem; }
+h2 { font-size: 1.5rem; font-weight: 700; margin: 0 0 0.5rem; }
+h3 { font-size: 1.25rem; font-weight: 600; margin: 0 0 0.5rem; }
+h4 { font-size: 1rem; font-weight: 600; margin: 0 0 0.5rem; }
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  background: var(--color-primary-dark);
+  color: var(--color-primary-light);
+  border: 1px solid var(--color-primary-dark);
+  border-radius: 0;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+button:hover {
+  background: var(--color-primary-light);
+  color: var(--color-primary-dark);
+}
+
+input {
+  font-family: inherit;
+  font-size: inherit;
+  border: 1px solid var(--color-primary-dark);
+  border-radius: 0;
+  padding: 0.5rem;
+  background: var(--color-primary-light);
+  color: var(--color-primary-dark);
+}
+
+input:focus {
+  outline: 2px solid var(--color-tertiary);
+  outline-offset: -2px;
+}
+
+a {
+  color: var(--color-primary-dark);
+}
+
+.container {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.row {
+  display: flex;
+  flex-direction: row;
+  gap: 0.5rem;
+}
+
+.muted {
+  color: var(--color-secondary-dark);
 }
