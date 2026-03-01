@@ -100,10 +100,35 @@ CREATE VIRTUAL TABLE vec_embeddings USING vec0(
 """
 
 
+REDUCTIONS_TABLES_SQL = """
+CREATE TABLE IF NOT EXISTS reductions (
+    reduction_id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    embedding_reference TEXT NOT NULL,
+    method              TEXT NOT NULL,
+    target_dimensions   INTEGER NOT NULL,
+    params_json         TEXT NOT NULL DEFAULT '{}',
+    created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+    CHECK (method IN ('pca', 'umap')),
+    CHECK (json_valid(params_json))
+);
+
+CREATE TABLE IF NOT EXISTS reduction_coordinates (
+    reduction_id    INTEGER NOT NULL,
+    item_id         INTEGER NOT NULL,
+    coordinates_json TEXT NOT NULL,
+    PRIMARY KEY (reduction_id, item_id),
+    FOREIGN KEY (reduction_id) REFERENCES reductions (reduction_id),
+    FOREIGN KEY (item_id)      REFERENCES items (item_id),
+    CHECK (json_valid(coordinates_json))
+);
+"""
+
+
 def apply_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(CORE_TABLES_SQL)
     conn.executescript(JOBS_TABLES_SQL)
     conn.executescript(EMBEDDINGS_TABLES_SQL)
+    conn.executescript(REDUCTIONS_TABLES_SQL)
 
 
 def ensure_vec_table(conn: sqlite3.Connection, dimensions: int) -> None:

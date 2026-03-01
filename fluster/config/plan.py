@@ -20,6 +20,7 @@ class EmbeddingConfig(BaseModel):
 class PCAReduction(BaseModel):
     method: Literal["pca"] = "pca"
     enabled: bool = True
+    target_dimensions: int = 50
 
 
 class UMAPReduction(BaseModel):
@@ -44,7 +45,7 @@ class LLMProvider(str, Enum):
 
 class LLMConfig(BaseModel):
     provider: LLMProvider = LLMProvider.openai
-    model: str = "gpt-4o-mini"
+    model: str = "gpt-5-mini"
     max_llm_calls: int = 200
 
 
