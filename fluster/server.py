@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from fluster import __version__
 from fluster.config.project import project_dir, project_exists
 from fluster.db.connection import connect
-from fluster.jobs.manager import create_job, get_job, request_cancel
+from fluster.jobs.manager import create_job, get_active_job, get_job, request_cancel
 
 # ---------------------------------------------------------------------------
 # Pydantic models
@@ -136,9 +136,7 @@ def create_job_endpoint(
     body: CreateJobRequest,
     conn: sqlite3.Connection = Depends(get_conn),
 ) -> CreateJobResponse:
-    active = conn.execute(
-        "SELECT job_id FROM jobs WHERE status IN ('queued', 'running') LIMIT 1"
-    ).fetchone()
+    active = get_active_job(conn)
     if active:
         raise HTTPException(
             status_code=409,

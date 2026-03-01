@@ -5,25 +5,15 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from fluster.config import settings
-from fluster.config.project import create_project, project_dir
+from fluster.config.project import project_dir
 from fluster.db.connection import connect
 from fluster.jobs.manager import create_job, start_job, succeed_job
 from fluster.server import create_app
 
 
 @pytest.fixture
-def project(tmp_path, monkeypatch):
-    home = tmp_path / ".fluster"
-    monkeypatch.setattr(settings, "FLUSTER_HOME", home)
-    monkeypatch.setattr(settings, "PROJECTS_DIR", home / "projects")
-    create_project("test-proj")
-    return "test-proj"
-
-
-@pytest.fixture
-def client(project):
-    app = create_app(project)
+def client(named_project):
+    app = create_app(named_project)
     return TestClient(app)
 
 
@@ -96,9 +86,9 @@ def test_cancel_job(client):
     assert data["cancel_requested"] is True
 
 
-def test_cancel_finished_job(client, project):
+def test_cancel_finished_job(client, named_project):
     # Create and finish a job directly via the manager.
-    conn = connect(project_dir(project))
+    conn = connect(project_dir(named_project))
     job_id = create_job(conn, "full_run")
     start_job(conn, job_id)
     succeed_job(conn, job_id)
@@ -131,9 +121,9 @@ def test_get_cluster_run_not_found(client):
     assert resp.status_code == 404
 
 
-def test_get_cluster_run_detail(client, project):
+def test_get_cluster_run_detail(client, named_project):
     """Seed a minimal cluster run and verify the detail endpoint."""
-    conn = connect(project_dir(project))
+    conn = connect(project_dir(named_project))
 
     # Create a reduction for the cluster run to reference.
     conn.execute(

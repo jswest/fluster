@@ -24,14 +24,6 @@ class SimpleOutput(BaseModel):
 
 # --- Fixtures ---
 
-@pytest.fixture
-def project(tmp_path):
-    artifacts_dir = tmp_path / "artifacts"
-    artifacts_dir.mkdir()
-    conn = connect(tmp_path)
-    yield tmp_path, conn
-    conn.close()
-
 
 def _openai_config():
     return LLMConfig(provider=LLMProvider.openai, model="gpt-5-mini")

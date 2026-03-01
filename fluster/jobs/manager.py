@@ -2,7 +2,6 @@
 
 import json
 import sqlite3
-from datetime import datetime, timezone
 
 
 def create_job(
@@ -85,6 +84,13 @@ def get_job(conn: sqlite3.Connection, job_id: int) -> sqlite3.Row | None:
     ).fetchone()
 
 
+def get_active_job(conn: sqlite3.Connection) -> sqlite3.Row | None:
+    """Return the currently active (queued or running) job, if any."""
+    return conn.execute(
+        "SELECT * FROM jobs WHERE status IN ('queued', 'running') LIMIT 1"
+    ).fetchone()
+
+
 def log_job(
     conn: sqlite3.Connection,
     job_id: int,
@@ -104,4 +110,15 @@ def get_job_logs(conn: sqlite3.Connection, job_id: int) -> list[sqlite3.Row]:
     return conn.execute(
         "SELECT * FROM job_logs WHERE job_id = ? ORDER BY job_log_id",
         (job_id,),
+    ).fetchall()
+
+
+def list_jobs(
+    conn: sqlite3.Connection,
+    limit: int = 20,
+) -> list[sqlite3.Row]:
+    """Return the most recent jobs, newest first."""
+    return conn.execute(
+        "SELECT * FROM jobs ORDER BY job_id DESC LIMIT ?",
+        (limit,),
     ).fetchall()

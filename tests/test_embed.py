@@ -10,14 +10,6 @@ from fluster.pipeline.ingest import ingest_rows
 from fluster.pipeline.materialize import materialize_items
 
 
-@pytest.fixture
-def project(tmp_path):
-    artifacts_dir = tmp_path / "artifacts"
-    artifacts_dir.mkdir()
-    conn = connect(tmp_path)
-    yield tmp_path, conn
-    conn.close()
-
 
 def _write_csv(path, header, *rows):
     csv_file = path / "data.csv"

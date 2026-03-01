@@ -9,15 +9,6 @@ from fluster.db.connection import connect
 from fluster.pipeline.ingest import ingest_rows
 
 
-@pytest.fixture
-def project(tmp_path):
-    """Set up a minimal project directory with a db connection."""
-    artifacts_dir = tmp_path / "artifacts"
-    artifacts_dir.mkdir()
-    conn = connect(tmp_path)
-    yield tmp_path, conn
-    conn.close()
-
 
 def _write_csv(path: Path, header: str, *rows: str) -> Path:
     csv_file = path / "data.csv"
