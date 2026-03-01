@@ -61,11 +61,11 @@ v1: SvelteKit visualization layer (planned)
 | 12 | LLM interface — `generate_json` with OpenAI/Ollama | done |
 | 13 | `label_clusters` | done |
 | 14 | `critique_clusters` | done |
-| 15 | FastAPI server | planned |
+| 15 | FastAPI server | done |
 | 16 | CLI orchestration (`fluster run`) | planned |
 | 17 | Export | planned |
 
-137 tests. All passing.
+148 tests. All passing.
 
 ---
 

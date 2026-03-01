@@ -66,6 +66,26 @@ def ingest_rows_cmd(
         conn.close()
 
 
+@app.command()
+def serve(
+    project_name: str = typer.Argument(help="Project to serve."),
+    host: str = typer.Option("127.0.0.1", "--host", help="Bind address."),
+    port: int = typer.Option(8000, "--port", help="Bind port."),
+):
+    """Start the fluster API server for a project."""
+    if not project_exists(project_name):
+        logger.error(f"Project '{project_name}' does not exist.")
+        raise typer.Exit(code=1)
+
+    import uvicorn
+
+    from fluster.server import create_app
+
+    fastapi_app = create_app(project_name)
+    logger.info(f"Serving project '{project_name}' on {host}:{port}")
+    uvicorn.run(fastapi_app, host=host, port=port)
+
+
 def main():
     app()
 
