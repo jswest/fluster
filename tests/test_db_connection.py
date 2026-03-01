@@ -1,6 +1,8 @@
 """Tests for SQLite bootstrap (Phase 2)."""
 
-from pathlib import Path
+import sqlite3
+
+import pytest
 
 from fluster.db.connection import connect
 
@@ -47,6 +49,34 @@ def test_schema_version_idempotent(tmp_path):
     row = conn2.execute("SELECT COUNT(*) FROM schema_version").fetchone()
     assert row[0] == 1
     conn2.close()
+
+
+def test_sqlite_vec_loaded(tmp_path):
+    conn = connect(tmp_path)
+    version = conn.execute("SELECT vec_version()").fetchone()[0]
+    assert version.startswith("v")
+    conn.close()
+
+
+def test_sqlite_vec_functional(tmp_path):
+    conn = connect(tmp_path)
+    # Create a vec0 virtual table and verify it works.
+    conn.execute("CREATE VIRTUAL TABLE test_vec USING vec0(embedding float[3])")
+    conn.execute(
+        "INSERT INTO test_vec (rowid, embedding) VALUES (1, ?)",
+        ["[1.0, 2.0, 3.0]"],
+    )
+    row = conn.execute("SELECT COUNT(*) FROM test_vec").fetchone()
+    assert row[0] == 1
+    conn.close()
+
+
+def test_extension_loading_disabled_after_connect(tmp_path):
+    conn = connect(tmp_path)
+    # enable_load_extension should have been turned off after loading vec0.
+    with pytest.raises(sqlite3.OperationalError):
+        conn.load_extension("nonexistent")
+    conn.close()
 
 
 def test_row_factory_returns_rows(tmp_path):
