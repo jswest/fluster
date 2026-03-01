@@ -1,8 +1,10 @@
 """fluster CLI — powered by Typer."""
 
 import typer
+from loguru import logger
 
 from fluster import __version__
+from fluster.config.project import create_project
 
 app = typer.Typer(
     name="fluster",
@@ -25,6 +27,17 @@ def _main(
     ),
 ):
     """Clustering for confused data. Structure, with receipts."""
+
+
+@app.command()
+def init(project_name: str = typer.Argument(help="Name for the new project.")):
+    """Create a new fluster project."""
+    try:
+        pdir = create_project(project_name)
+    except FileExistsError:
+        logger.error(f"Project '{project_name}' already exists.")
+        raise typer.Exit(code=1)
+    logger.info(f"Created project '{project_name}' at {pdir}")
 
 
 def main():
