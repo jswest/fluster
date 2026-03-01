@@ -12,7 +12,7 @@ from fluster.config.plan import PCAReduction, Plan, UMAPReduction
 from fluster.config.settings import SEED
 
 
-def _load_embedding_vectors(conn: sqlite3.Connection) -> tuple[list[int], np.ndarray]:
+def load_embedding_vectors(conn: sqlite3.Connection) -> tuple[list[int], np.ndarray]:
     """Load all embedding vectors and their associated item_ids.
 
     Returns (item_ids, vectors_matrix) where vectors_matrix is shape (n, dims).
@@ -105,7 +105,7 @@ def reduce_items(
     """
     model_name = plan.embedding.model_name
 
-    item_ids, vectors = _load_embedding_vectors(conn)
+    item_ids, vectors = load_embedding_vectors(conn)
 
     if len(item_ids) == 0:
         return {"reductions_created": 0, "skipped": 0}
