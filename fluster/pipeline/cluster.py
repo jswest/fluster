@@ -27,7 +27,7 @@ def _find_reduction(
     ).fetchone()
 
 
-def _load_coordinates(
+def load_coordinates(
     conn: sqlite3.Connection, reduction_id: int
 ) -> tuple[list[int], np.ndarray]:
     """Load reduction coordinates as (item_ids, matrix)."""
@@ -92,7 +92,7 @@ def cluster_items(
             skipped += 1
             continue
 
-        item_ids, coords = _load_coordinates(conn, reduction_id)
+        item_ids, coords = load_coordinates(conn, reduction_id)
 
         if len(item_ids) == 0:
             skipped += 1

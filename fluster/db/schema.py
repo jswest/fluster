@@ -194,6 +194,17 @@ CREATE TABLE IF NOT EXISTS cluster_summaries (
 """
 
 
+CRITIQUE_TABLES_SQL = """
+CREATE TABLE IF NOT EXISTS cluster_run_critiques (
+    cluster_run_id  INTEGER PRIMARY KEY,
+    critique_json   TEXT NOT NULL,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (cluster_run_id) REFERENCES cluster_runs (cluster_run_id),
+    CHECK (json_valid(critique_json))
+);
+"""
+
+
 def apply_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(CORE_TABLES_SQL)
     conn.executescript(JOBS_TABLES_SQL)
@@ -203,6 +214,7 @@ def apply_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(EXEMPLARS_TABLES_SQL)
     conn.executescript(LLM_TABLES_SQL)
     conn.executescript(LABEL_TABLES_SQL)
+    conn.executescript(CRITIQUE_TABLES_SQL)
 
 
 def ensure_vec_table(conn: sqlite3.Connection, dimensions: int) -> None:

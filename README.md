@@ -59,13 +59,13 @@ v1: SvelteKit visualization layer (planned)
 | 10 | `cluster_items` — HDBSCAN on UMAP-8D | done |
 | 11 | Exemplars — faux-medoid selection per cluster | done |
 | 12 | LLM interface — `generate_json` with OpenAI/Ollama | done |
-| 13 | `label_clusters` | up next |
-| 14 | `critique_clusters` | planned |
+| 13 | `label_clusters` | done |
+| 14 | `critique_clusters` | done |
 | 15 | FastAPI server | planned |
 | 16 | CLI orchestration (`fluster run`) | planned |
 | 17 | Export | planned |
 
-122 tests. All passing.
+137 tests. All passing.
 
 ---
 
