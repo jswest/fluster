@@ -4,10 +4,10 @@ from pathlib import Path
 
 from fluster.config.project import (
     create_project,
-    default_plan,
     list_projects,
     project_exists,
 )
+from fluster.config.plan import Plan, load_plan
 from fluster.config import settings
 
 import yaml
@@ -38,8 +38,8 @@ def test_create_project_writes_valid_yaml(tmp_fluster_home):
     project_meta = yaml.safe_load((pdir / "project.yaml").read_text())
     assert project_meta["name"] == "test-proj"
 
-    plan = yaml.safe_load((pdir / "plan.yaml").read_text())
-    assert plan == default_plan()
+    plan = load_plan(pdir / "plan.yaml")
+    assert plan == Plan()
 
 
 def test_project_exists(tmp_fluster_home):

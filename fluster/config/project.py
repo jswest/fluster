@@ -5,6 +5,7 @@ from pathlib import Path
 import yaml
 
 from fluster.config import settings
+from fluster.config.plan import Plan, save_plan
 
 
 def project_dir(project_name: str) -> Path:
@@ -26,32 +27,6 @@ def list_projects() -> list[str]:
         d.name for d in settings.PROJECTS_DIR.iterdir()
         if d.is_dir() and (d / settings.PROJECT_YAML).is_file()
     )
-
-
-def default_plan() -> dict:
-    return {
-        "embedding": {
-            "model_name": "all-MiniLM-L6-v2",
-            "max_tokens": 256,
-        },
-        "reductions": [
-            {"method": "pca", "enabled": True},
-            {"method": "umap", "target_dimensions": 2, "random_state": 42},
-            {"method": "umap", "target_dimensions": 8, "random_state": 42},
-        ],
-        "clustering": [
-            {
-                "method": "hdbscan",
-                "reduction": "umap_8d",
-                "params": {"min_cluster_size": 5},
-            },
-        ],
-        "llm": {
-            "provider": "openai",
-            "model": "gpt-4o-mini",
-            "max_llm_calls": 200,
-        },
-    }
 
 
 def create_project(project_name: str) -> Path:
@@ -76,8 +51,6 @@ def create_project(project_name: str) -> Path:
     )
 
     # plan.yaml
-    (pdir / settings.PLAN_YAML).write_text(
-        yaml.dump(default_plan(), default_flow_style=False)
-    )
+    save_plan(Plan(), pdir / settings.PLAN_YAML)
 
     return pdir
