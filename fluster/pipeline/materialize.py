@@ -1,0 +1,104 @@
+"""materialize_items — extract text from artifacts and build embedding_text."""
+
+import hashlib
+import json
+import sqlite3
+from pathlib import Path
+
+
+def _extract_text(stored_path: str, project_dir: Path) -> str:
+    """Extract text content from a stored artifact. Text files only for v0."""
+    full_path = project_dir / "artifacts" / stored_path
+    try:
+        return full_path.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, FileNotFoundError):
+        return ""
+
+
+def _build_embedding_text(
+    row_name: str | None,
+    metadata: dict,
+    extracted_text: str,
+) -> str:
+    """Assemble the embedding_text from available components."""
+    parts = []
+    if row_name:
+        parts.append(row_name)
+    if metadata:
+        meta_str = ", ".join(f"{k}: {v}" for k, v in metadata.items() if v != "")
+        if meta_str:
+            parts.append(meta_str)
+    if extracted_text:
+        parts.append(extracted_text)
+    return "\n\n".join(parts)
+
+
+def _text_hash(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def materialize_items(
+    conn: sqlite3.Connection,
+    project_dir: Path,
+) -> dict:
+    """Build embedding_text representations for all items that lack one.
+
+    Returns a summary dict with counts.
+    """
+    # Find items that don't yet have an embedding_text representation.
+    items = conn.execute("""
+        SELECT i.item_id, r.row_name, r.row_metadata_json
+        FROM items i
+        JOIN rows r ON i.row_id = r.row_id
+        WHERE i.item_id NOT IN (
+            SELECT item_id FROM representations
+            WHERE representation_type = 'embedding_text'
+        )
+        ORDER BY i.item_id
+    """).fetchall()
+
+    materialized = 0
+    skipped = 0
+
+    for item in items:
+        item_id = item["item_id"]
+        row_name = item["row_name"]
+        metadata = json.loads(item["row_metadata_json"])
+
+        # Get all artifacts for this item.
+        artifacts = conn.execute(
+            "SELECT a.stored_path FROM item_artifacts ia "
+            "JOIN artifacts a ON ia.artifact_id = a.artifact_id "
+            "WHERE ia.item_id = ?",
+            (item_id,),
+        ).fetchall()
+
+        # Extract text from all artifacts.
+        extracted_parts = []
+        for art in artifacts:
+            text = _extract_text(art["stored_path"], project_dir)
+            if text.strip():
+                extracted_parts.append(text.strip())
+
+        extracted_text = "\n\n".join(extracted_parts)
+
+        embedding_text = _build_embedding_text(row_name, metadata, extracted_text)
+
+        if not embedding_text.strip():
+            skipped += 1
+            continue
+
+        conn.execute(
+            "INSERT INTO representations "
+            "(item_id, representation_type, text, text_hash) "
+            "VALUES (?, 'embedding_text', ?, ?)",
+            (item_id, embedding_text, _text_hash(embedding_text)),
+        )
+        materialized += 1
+
+    conn.commit()
+
+    return {
+        "materialized": materialized,
+        "skipped": skipped,
+    }
