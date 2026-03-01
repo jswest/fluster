@@ -1,6 +1,8 @@
 """fluster CLI — powered by Typer."""
 
 import json
+import os
+import subprocess
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -259,6 +261,49 @@ def serve(
     fastapi_app = create_app(project_name)
     logger.info(f"Serving project '{project_name}' on {host}:{port}")
     uvicorn.run(fastapi_app, host=host, port=port)
+
+
+@app.command()
+def chill(
+    project_name: str = typer.Argument(help="Project to visualize."),
+    port: int = typer.Option(3000, "--port", help="Port to serve on."),
+    host: str = typer.Option("127.0.0.1", "--host", help="Bind address."),
+    dev: bool = typer.Option(False, "--dev", help="Run SvelteKit dev server instead of production build."),
+):
+    """Launch the fluster visualization UI for a project."""
+    if not project_exists(project_name):
+        logger.error(f"Project '{project_name}' does not exist.")
+        raise typer.Exit(code=1)
+
+    client_dir = settings.CLIENT_DIR
+    if not client_dir.is_dir():
+        logger.error(f"Client directory not found at {client_dir}")
+        raise typer.Exit(code=1)
+
+    db_path = project_dir(project_name) / settings.PROJECT_DB
+    env = {
+        **os.environ,
+        "FLUSTER_DB_PATH": str(db_path),
+        "FLUSTER_PROJECT_NAME": project_name,
+        "PORT": str(port),
+        "HOST": host,
+    }
+
+    if dev:
+        cmd = ["npm", "run", "dev", "--", "--port", str(port), "--host", host]
+    else:
+        if not (client_dir / "build" / "index.js").is_file():
+            logger.error(
+                "Client not built. Run 'npm run build' in the client/ directory, "
+                "or use --dev for the dev server."
+            )
+            raise typer.Exit(code=1)
+        cmd = ["node", "build/index.js"]
+
+    url = f"http://{host}:{port}"
+    logger.info(f"Launching fluster UI for '{project_name}' at {url}")
+    result = subprocess.run(cmd, cwd=client_dir, env=env)
+    raise typer.Exit(code=result.returncode)
 
 
 def main():
