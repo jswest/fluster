@@ -8,6 +8,8 @@ import shutil
 import sqlite3
 from pathlib import Path
 
+_SPECIAL_COLS = {"name", "file_path"}
+
 
 def _sha256_file(path: Path) -> str:
     h = hashlib.sha256()
@@ -39,9 +41,7 @@ def _store_artifact(
 
 
 def _resolve_file(value: str, csv_dir: Path) -> Path | None:
-    """If a cell value looks like a file path and the file exists, return it."""
-    if not value or len(value) > 1024:
-        return None
+    """Resolve a file_path value to an absolute Path, or None if not found."""
     candidate = Path(value)
     if candidate.is_absolute() and candidate.is_file():
         return candidate
@@ -72,17 +72,21 @@ def ingest_rows(
         if reader.fieldnames is None:
             raise ValueError("CSV file has no header row")
 
+        if "file_path" not in reader.fieldnames:
+            raise ValueError(
+                "CSV must contain a 'file_path' column. "
+                "This column should hold the path to each row's source file."
+            )
+
         rows_created = 0
         items_created = 0
         artifacts_linked = 0
 
         for row_number, csv_row in enumerate(reader, start=1):
-            # Determine row_name: use 'name' column if present.
             row_name = csv_row.get("name")
 
-            # Everything else is metadata.
             metadata = {
-                k: v for k, v in csv_row.items() if k != "name"
+                k: v for k, v in csv_row.items() if k not in _SPECIAL_COLS
             }
 
             cur = conn.execute(
@@ -99,19 +103,19 @@ def ingest_rows(
             item_id = cur.lastrowid
             items_created += 1
 
-            # Check each cell for file references.
-            for col_name, cell_value in csv_row.items():
-                if not cell_value:
-                    continue
-                file_path = _resolve_file(cell_value, csv_dir)
+            # Resolve the file_path column for artifact ingestion.
+            file_value = csv_row["file_path"]
+            if file_value:
+                file_path = _resolve_file(file_value, csv_dir)
                 if file_path is None:
-                    continue
+                    raise FileNotFoundError(
+                        f"Row {row_number}: file_path '{file_value}' not found"
+                    )
 
                 sha, stored_path, mime_type, file_bytes = _store_artifact(
                     file_path, artifacts_dir
                 )
 
-                # Insert artifact if not already present (content-addressed).
                 conn.execute(
                     "INSERT OR IGNORE INTO artifacts "
                     "(artifact_id, original_path, stored_path, mime_type, bytes) "
@@ -122,7 +126,7 @@ def ingest_rows(
                 conn.execute(
                     "INSERT OR IGNORE INTO item_artifacts (item_id, artifact_id, role) "
                     "VALUES (?, ?, ?)",
-                    (item_id, sha, col_name),
+                    (item_id, sha, "source"),
                 )
                 artifacts_linked += 1
 
