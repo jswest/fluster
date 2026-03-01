@@ -39,33 +39,7 @@ It is:
 
 ## Status
 
-v0: CLI + FastAPI backend (`uv`, baybee!)
-v1: SvelteKit visualization layer (planned)
-
-### What's working (v0)
-
-| Phase | What | Status |
-|-------|------|--------|
-| 0 | Repo skeleton + dependencies | done |
-| 1 | Workspace + project layout | done |
-| 2 | SQLite bootstrap (WAL, JSON1, sqlite-vec) | done |
-| 3 | Core tables (rows, items, artifacts, representations) | done |
-| 4 | Jobs + job_logs | done |
-| 5 | Plan YAML schema (Pydantic) | done |
-| 6 | `ingest_rows` — CSV to rows + items + artifacts | done |
-| 7 | `materialize_items` — extract text, build embedding_text | done |
-| 8 | `embed_items` — sentence-transformers + vec0 storage | done |
-| 9 | `reduce_items` — PCA + UMAP (2D & 8D) | done |
-| 10 | `cluster_items` — HDBSCAN on UMAP-8D | done |
-| 11 | Exemplars — faux-medoid selection per cluster | done |
-| 12 | LLM interface — `generate_json` with OpenAI/Ollama | done |
-| 13 | `label_clusters` | done |
-| 14 | `critique_clusters` | done |
-| 15 | FastAPI server | done |
-| 16 | CLI orchestration (`fluster run`) | done |
-| 17 | Export | done |
-
-175 tests. All passing.
+v0 (CLI + pipeline) is complete. v1 (SvelteKit visualization) is in progress.
 
 ---
 
@@ -77,12 +51,13 @@ Every embedding, reduction, cluster run, label, and critique is stored in the pr
 
 ---
 
-## Quick Start (v0)
+## Quick Start
 
 ```bash
-fluster init project-foo
-fluster ingest-rows project-foo data.csv
-fluster run project-foo
+fluster init my-project
+fluster ingest-rows my-project data.csv
+fluster run my-project
+fluster chill my-project
 ```
 
 ---
