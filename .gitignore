@@ -1,4 +1,5 @@
 build/
+demo/*.csv
 dist/
 *.egg-info
 *.py[oc]
