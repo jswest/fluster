@@ -7,7 +7,7 @@ import sqlite_vec
 from loguru import logger
 
 from fluster.config import settings
-from fluster.db.schema import apply_core_schema
+from fluster.db.schema import apply_schema
 
 
 def connect(project_dir: Path) -> sqlite3.Connection:
@@ -24,7 +24,7 @@ def connect(project_dir: Path) -> sqlite3.Connection:
     _assert_json1(conn)
     _load_sqlite_vec(conn)
     _ensure_schema_version(conn)
-    apply_core_schema(conn)
+    apply_schema(conn)
 
     logger.debug(f"Connected to {db_path}")
     return conn

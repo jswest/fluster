@@ -166,9 +166,9 @@ def test_foreign_key_enforcement(conn):
 
 
 def test_schema_idempotent(conn):
-    """Calling apply_core_schema twice on the same db should not fail."""
-    from fluster.db.schema import apply_core_schema
-    apply_core_schema(conn)
+    """Calling apply_schema twice on the same db should not fail."""
+    from fluster.db.schema import apply_schema
+    apply_schema(conn)
     tables = conn.execute(
         "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN "
         "('rows','artifacts','items','item_artifacts','representations')"

@@ -1,4 +1,4 @@
-"""Core table definitions (Phase 3)."""
+"""Table definitions (Phases 3–4)."""
 
 import sqlite3
 
@@ -50,6 +50,36 @@ CREATE TABLE IF NOT EXISTS representations (
 );
 """
 
+JOBS_TABLES_SQL = """
+CREATE TABLE IF NOT EXISTS jobs (
+    job_id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_type            TEXT NOT NULL,
+    status              TEXT NOT NULL DEFAULT 'queued',
+    input_params_json   TEXT NOT NULL DEFAULT '{}',
+    progress_json       TEXT NOT NULL DEFAULT '{}',
+    cancel_requested_at TEXT,
+    started_at          TEXT,
+    finished_at         TEXT,
+    error_message       TEXT,
+    created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+    CHECK (status IN ('queued', 'running', 'succeeded', 'failed', 'canceled')),
+    CHECK (json_valid(input_params_json)),
+    CHECK (json_valid(progress_json))
+);
 
-def apply_core_schema(conn: sqlite3.Connection) -> None:
+CREATE TABLE IF NOT EXISTS job_logs (
+    job_log_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id          INTEGER NOT NULL,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    level           TEXT NOT NULL DEFAULT 'info',
+    message         TEXT NOT NULL,
+    payload_json    TEXT,
+    FOREIGN KEY (job_id) REFERENCES jobs (job_id),
+    CHECK (level IN ('debug', 'info', 'warning', 'error'))
+);
+"""
+
+
+def apply_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(CORE_TABLES_SQL)
+    conn.executescript(JOBS_TABLES_SQL)
