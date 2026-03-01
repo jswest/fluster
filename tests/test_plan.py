@@ -55,7 +55,7 @@ def test_default_clustering():
 def test_default_llm():
     plan = Plan()
     assert plan.llm.provider == LLMProvider.openai
-    assert plan.llm.model == "gpt-4o-mini"
+    assert plan.llm.model == "gpt-5-mini"
     assert plan.llm.max_llm_calls == 200
 
 

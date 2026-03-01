@@ -124,11 +124,36 @@ CREATE TABLE IF NOT EXISTS reduction_coordinates (
 """
 
 
+CLUSTERING_TABLES_SQL = """
+CREATE TABLE IF NOT EXISTS cluster_runs (
+    cluster_run_id  INTEGER PRIMARY KEY AUTOINCREMENT,
+    reduction_id    INTEGER NOT NULL,
+    method          TEXT NOT NULL,
+    params_json     TEXT NOT NULL DEFAULT '{}',
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (reduction_id) REFERENCES reductions (reduction_id),
+    CHECK (method IN ('hdbscan')),
+    CHECK (json_valid(params_json))
+);
+
+CREATE TABLE IF NOT EXISTS cluster_assignments (
+    cluster_run_id          INTEGER NOT NULL,
+    item_id                 INTEGER NOT NULL,
+    cluster_id              INTEGER NOT NULL,
+    membership_probability  REAL NOT NULL,
+    PRIMARY KEY (cluster_run_id, item_id),
+    FOREIGN KEY (cluster_run_id) REFERENCES cluster_runs (cluster_run_id),
+    FOREIGN KEY (item_id)        REFERENCES items (item_id)
+);
+"""
+
+
 def apply_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(CORE_TABLES_SQL)
     conn.executescript(JOBS_TABLES_SQL)
     conn.executescript(EMBEDDINGS_TABLES_SQL)
     conn.executescript(REDUCTIONS_TABLES_SQL)
+    conn.executescript(CLUSTERING_TABLES_SQL)
 
 
 def ensure_vec_table(conn: sqlite3.Connection, dimensions: int) -> None:
