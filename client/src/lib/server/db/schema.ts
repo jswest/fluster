@@ -1,4 +1,4 @@
-import { sqliteTable, integer, text, foreignKey, primaryKey, real } from "drizzle-orm/sqlite-core"
+import { sqliteTable, integer, text, primaryKey, real } from "drizzle-orm/sqlite-core"
 import { sql } from "drizzle-orm"
 
 export const schemaVersion = sqliteTable("schema_version", {

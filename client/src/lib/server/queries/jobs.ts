@@ -1,9 +1,9 @@
-import { desc, eq } from 'drizzle-orm';
+import { asc, desc, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { jobs, jobLogs } from '$lib/server/db/schema';
 
-export function getJobs() {
-	return db.select().from(jobs).orderBy(desc(jobs.createdAt)).all();
+export function getJobs(limit = 50) {
+	return db.select().from(jobs).orderBy(desc(jobs.createdAt)).limit(limit).all();
 }
 
 export function getJob(jobId: number) {
@@ -15,7 +15,7 @@ export function getJobLogs(jobId: number, limit = 200) {
 		.select()
 		.from(jobLogs)
 		.where(eq(jobLogs.jobId, jobId))
-		.orderBy(desc(jobLogs.jobLogId))
+		.orderBy(asc(jobLogs.jobLogId))
 		.limit(limit)
 		.all();
 }
