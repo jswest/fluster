@@ -63,9 +63,9 @@ v1: SvelteKit visualization layer (planned)
 | 14 | `critique_clusters` | done |
 | 15 | FastAPI server | done |
 | 16 | CLI orchestration (`fluster run`) | done |
-| 17 | Export | planned |
+| 17 | Export | done |
 
-164 tests. All passing.
+175 tests. All passing.
 
 ---
 
@@ -109,7 +109,7 @@ uv run pytest -k "cluster" -v
 
 ```
 fluster/
-├── cli.py              # Typer CLI (init, ingest-rows, run, jobs, serve)
+├── cli.py              # Typer CLI (init, ingest-rows, run, export, jobs, serve)
 ├── server.py           # FastAPI server (create_app factory)
 ├── config/             # Plan YAML schema, project layout, settings
 ├── db/                 # SQLite connection + schema

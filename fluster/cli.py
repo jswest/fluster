@@ -24,6 +24,7 @@ from fluster.jobs.manager import (
     start_job,
     succeed_job,
 )
+from fluster.pipeline.export import export_cluster_run
 from fluster.pipeline.ingest import ingest_rows
 from fluster.pipeline.run import PipelineCancelled, run_pipeline
 
@@ -237,6 +238,33 @@ def cancel(
 
         request_cancel(conn, job_id)
         logger.info(f"Cancellation requested for job {job_id}.")
+    finally:
+        conn.close()
+
+
+@app.command()
+def export(
+    project_name: str = typer.Argument(help="Project to export from."),
+    cluster_run: int = typer.Option(..., "--cluster-run", help="Cluster run ID to export."),
+    output: Path | None = typer.Option(None, "--output", "-o", help="Output file path. Defaults to stdout."),
+):
+    """Export a cluster run's results to CSV."""
+    if not project_exists(project_name):
+        logger.error(f"Project '{project_name}' does not exist.")
+        raise typer.Exit(code=1)
+
+    pdir = project_dir(project_name)
+    conn = connect(pdir)
+    try:
+        csv_text = export_cluster_run(conn, cluster_run)
+        if output:
+            output.write_text(csv_text)
+            logger.info(f"Exported to {output}")
+        else:
+            typer.echo(csv_text, nl=False)
+    except ValueError as exc:
+        logger.error(str(exc))
+        raise typer.Exit(code=1)
     finally:
         conn.close()
 
