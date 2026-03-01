@@ -180,6 +180,20 @@ CREATE TABLE IF NOT EXISTS llm_calls (
 """
 
 
+LABEL_TABLES_SQL = """
+CREATE TABLE IF NOT EXISTS cluster_summaries (
+    cluster_summary_id  INTEGER PRIMARY KEY AUTOINCREMENT,
+    cluster_run_id      INTEGER NOT NULL,
+    cluster_id          INTEGER NOT NULL,
+    label               TEXT NOT NULL,
+    label_json          TEXT NOT NULL,
+    created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (cluster_run_id) REFERENCES cluster_runs (cluster_run_id),
+    CHECK (json_valid(label_json))
+);
+"""
+
+
 def apply_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(CORE_TABLES_SQL)
     conn.executescript(JOBS_TABLES_SQL)
@@ -188,6 +202,7 @@ def apply_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(CLUSTERING_TABLES_SQL)
     conn.executescript(EXEMPLARS_TABLES_SQL)
     conn.executescript(LLM_TABLES_SQL)
+    conn.executescript(LABEL_TABLES_SQL)
 
 
 def ensure_vec_table(conn: sqlite3.Connection, dimensions: int) -> None:
