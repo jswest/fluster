@@ -162,6 +162,24 @@ CREATE TABLE IF NOT EXISTS cluster_exemplars (
 """
 
 
+LLM_TABLES_SQL = """
+CREATE TABLE IF NOT EXISTS llm_calls (
+    llm_call_id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id              INTEGER,
+    task_name           TEXT NOT NULL,
+    provider            TEXT NOT NULL,
+    model               TEXT NOT NULL,
+    input_json          TEXT NOT NULL,
+    output_raw_text     TEXT,
+    output_parsed_json  TEXT,
+    created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (job_id) REFERENCES jobs (job_id),
+    CHECK (json_valid(input_json)),
+    CHECK (output_parsed_json IS NULL OR json_valid(output_parsed_json))
+);
+"""
+
+
 def apply_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(CORE_TABLES_SQL)
     conn.executescript(JOBS_TABLES_SQL)
@@ -169,6 +187,7 @@ def apply_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(REDUCTIONS_TABLES_SQL)
     conn.executescript(CLUSTERING_TABLES_SQL)
     conn.executescript(EXEMPLARS_TABLES_SQL)
+    conn.executescript(LLM_TABLES_SQL)
 
 
 def ensure_vec_table(conn: sqlite3.Connection, dimensions: int) -> None:
