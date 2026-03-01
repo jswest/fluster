@@ -82,14 +82,16 @@ def test_ingest_metadata_excludes_special_columns(project):
     assert meta == {"category": "A", "score": "95"}
 
 
-# --- file_path header requirement ---
+# --- CSV without file_path column ---
 
-def test_ingest_missing_file_path_header(project):
+def test_ingest_without_file_path_column_succeeds(project):
+    """CSV without a file_path column should ingest rows with no artifacts."""
     pdir, conn = project
     csv_file = _write_csv(pdir, "name,color", "apple,red")
 
-    with pytest.raises(ValueError, match="file_path"):
-        ingest_rows(conn, csv_file, pdir)
+    summary = ingest_rows(conn, csv_file, pdir)
+    assert summary["rows_created"] == 1
+    assert summary["artifacts_linked"] == 0
 
 
 # --- Artifact ingestion ---

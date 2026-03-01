@@ -72,12 +72,6 @@ def ingest_rows(
         if reader.fieldnames is None:
             raise ValueError("CSV file has no header row")
 
-        if "file_path" not in reader.fieldnames:
-            raise ValueError(
-                "CSV must contain a 'file_path' column. "
-                "This column should hold the path to each row's source file."
-            )
-
         rows_created = 0
         items_created = 0
         artifacts_linked = 0
@@ -104,7 +98,7 @@ def ingest_rows(
             items_created += 1
 
             # Resolve the file_path column for artifact ingestion.
-            file_value = csv_row["file_path"]
+            file_value = csv_row.get("file_path", "")
             if file_value:
                 file_path = _resolve_file(file_value, csv_dir)
                 if file_path is None:
