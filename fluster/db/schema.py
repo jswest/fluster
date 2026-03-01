@@ -80,6 +80,37 @@ CREATE TABLE IF NOT EXISTS job_logs (
 """
 
 
+EMBEDDINGS_TABLES_SQL = """
+CREATE TABLE IF NOT EXISTS embeddings (
+    embedding_id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    representation_id   INTEGER NOT NULL,
+    model_name          TEXT NOT NULL,
+    dimensions          INTEGER NOT NULL,
+    created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (representation_id) REFERENCES representations (representation_id)
+);
+"""
+
+# vec0 virtual tables can't use IF NOT EXISTS, so we handle that in code.
+VEC_EMBEDDINGS_DDL = """
+CREATE VIRTUAL TABLE vec_embeddings USING vec0(
+    embedding_id INTEGER PRIMARY KEY,
+    vector float[{dimensions}]
+);
+"""
+
+
 def apply_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(CORE_TABLES_SQL)
     conn.executescript(JOBS_TABLES_SQL)
+    conn.executescript(EMBEDDINGS_TABLES_SQL)
+
+
+def ensure_vec_table(conn: sqlite3.Connection, dimensions: int) -> None:
+    """Create the vec_embeddings virtual table if it doesn't exist."""
+    exists = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='vec_embeddings'"
+    ).fetchone()
+    if not exists:
+        # vec0 DDL doesn't support parameterized dimensions; value is always int from model.
+        conn.execute(VEC_EMBEDDINGS_DDL.format(dimensions=dimensions))
