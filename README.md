@@ -71,7 +71,7 @@ v1: SvelteKit visualization layer (planned)
 
 ## Core Philosophy
 
-> Structure, with receipts.
+> Structure and cluster locally first, with receipts.
 
 Every embedding, reduction, cluster run, label, and critique is stored in the project database. Nothing is overwritten. You can always trace how a cluster came to be.
 
