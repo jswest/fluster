@@ -84,6 +84,7 @@ fluster run
 
 # Check on jobs and logs
 fluster jobs
+fluster job 1
 fluster logs
 
 # Export results
@@ -91,6 +92,9 @@ fluster export --cluster-run 1 -o results.csv
 
 # Launch the visualization UI
 fluster chill
+
+# Cancel a stuck job (--force for orphaned jobs)
+fluster cancel 1 --force
 
 # Switch between projects
 fluster list
