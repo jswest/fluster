@@ -6,6 +6,7 @@ import sqlite3
 from pathlib import Path
 
 from loguru import logger
+from tqdm import tqdm
 
 
 def _extract_text(stored_path: str, project_dir: Path) -> str:
@@ -65,7 +66,7 @@ def materialize_items(
     materialized = 0
     skipped = 0
 
-    for item in items:
+    for item in tqdm(items, desc="Materializing", unit="item", disable=len(items) == 0):
         item_id = item["item_id"]
         row_name = item["row_name"]
         metadata = json.loads(item["row_metadata_json"])

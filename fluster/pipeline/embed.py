@@ -10,8 +10,10 @@ os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
 warnings.filterwarnings("ignore", message=".*unauthenticated.*")
 logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
 logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
+logging.getLogger("transformers").setLevel(logging.WARNING)
 
 from sentence_transformers import SentenceTransformer
+from tqdm import tqdm
 
 from fluster.config.plan import Plan
 from fluster.db.schema import ensure_vec_table
@@ -57,7 +59,10 @@ def embed_items(
     embedded = 0
     total = len(reps)
 
-    for batch_start in range(0, total, _BATCH_SIZE):
+    batch_iter = tqdm(range(0, total, _BATCH_SIZE), desc="Embedding",
+                      unit="batch", disable=total == 0)
+
+    for batch_start in batch_iter:
         batch = reps[batch_start : batch_start + _BATCH_SIZE]
         texts = [r["text"] for r in batch]
         vectors = model.encode(texts, normalize_embeddings=True)
