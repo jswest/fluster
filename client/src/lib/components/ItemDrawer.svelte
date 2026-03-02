@@ -6,6 +6,7 @@
 		recordName: string;
 		metadata: Record<string, unknown>;
 		embeddingText: string;
+		imageArtifactId: string | null;
 	};
 
 	interface Props {
@@ -73,6 +74,17 @@
 				<span class="field-value">{item.recordName || 'unnamed'}</span>
 			</div>
 
+				{#if item.imageArtifactId}
+				<div class="field">
+					<span class="muted">Image</span>
+					<img
+						src="/api/artifacts/{item.imageArtifactId}"
+						alt={item.recordName || 'Image'}
+						class="item-image"
+					/>
+				</div>
+			{/if}
+
 			{#if Object.keys(item.metadata).length > 0}
 				<div class="field">
 					<span class="muted">Metadata</span>
@@ -88,7 +100,7 @@
 			{/if}
 
 			<div class="field">
-				<span class="muted">Embedding Text</span>
+				<span class="muted">{item.imageArtifactId ? 'Caption' : 'Embedding Text'}</span>
 				<pre class="embedding-text">{displayText}</pre>
 				{#if canExpand}
 					<button class="expand-btn" onclick={() => expanded = !expanded}>
@@ -167,6 +179,12 @@
 
 	.meta-entry .muted {
 		min-width: 10ch;
+	}
+
+	.item-image {
+		max-width: 100%;
+		height: auto;
+		border: 1px solid var(--color-secondary-dark);
 	}
 
 	.embedding-text {

@@ -8,6 +8,7 @@
 		clusterId: number;
 		recordName: string;
 		embeddingTextPreview: string;
+		imageArtifactId: string | null;
 	};
 
 	interface Props {
@@ -310,6 +311,13 @@
 				class="tooltip"
 				style="left: {tooltipX + 12}px; top: {tooltipY - 12}px;"
 			>
+				{#if hoveredPoint.imageArtifactId}
+					<img
+						src="/api/artifacts/{hoveredPoint.imageArtifactId}"
+						alt=""
+						class="tooltip-thumb"
+					/>
+				{/if}
 				<div class="tooltip-name">{hoveredPoint.recordName || 'unnamed'}</div>
 				<div class="tooltip-preview">{hoveredPoint.embeddingTextPreview.slice(0, 80)}{hoveredPoint.embeddingTextPreview.length > 80 ? '...' : ''}</div>
 				<div class="tooltip-cluster muted">cluster {hoveredPoint.clusterId}</div>
@@ -379,6 +387,14 @@
 		pointer-events: none;
 		z-index: 10;
 		line-height: 1.4;
+	}
+
+	.tooltip-thumb {
+		max-width: 8rem;
+		max-height: 6rem;
+		object-fit: contain;
+		margin-bottom: 0.25rem;
+		display: block;
 	}
 
 	.tooltip-name {
