@@ -54,6 +54,8 @@ Every embedding, reduction, cluster run, label, and critique is stored in the pr
 ## Quick Start
 
 ```bash
+uv tool install -e .
+
 fluster init my-project
 fluster ingest-rows my-project data.csv
 fluster run my-project
