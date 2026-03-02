@@ -87,6 +87,10 @@ def _embed_images(
     logger.info("Loading nomic-embed-vision-v1.5 for image embedding...")
     processor = AutoImageProcessor.from_pretrained(_VISION_MODEL)
     vision_model = AutoModel.from_pretrained(_VISION_MODEL, trust_remote_code=True)
+    # Workaround: transformers >=5.1.0 expects all_tied_weights_keys but
+    # trust_remote_code models may skip post_init() where it's set.
+    if not hasattr(vision_model, "all_tied_weights_keys"):
+        vision_model.all_tied_weights_keys = {}
     vision_model.eval()
 
     embedded = 0
