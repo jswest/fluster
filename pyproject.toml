@@ -19,6 +19,7 @@ dependencies = [
     "ollama>=0.4",
     "loguru>=0.7",
     "tqdm>=4.66",
+    "einops>=0.8.2",
 ]
 
 [project.scripts]

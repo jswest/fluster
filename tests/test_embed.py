@@ -40,7 +40,7 @@ def test_embed_creates_embeddings(project):
 
     assert summary["embedded"] == 1
     assert summary["total"] == 1
-    assert summary["model_name"] == "all-MiniLM-L6-v2"
+    assert summary["model_name"] == plan.embedding.model_name
     assert summary["dimensions"] > 0
 
 
@@ -60,7 +60,7 @@ def test_embed_stores_vector_in_vec_table(project):
     vector_bytes = row["vector"]
     assert len(vector_bytes) > 0
     float_count = len(vector_bytes) // 4  # float32
-    assert float_count == 384  # all-MiniLM-L6-v2 produces 384-d vectors
+    assert float_count == 768  # nomic-embed-text-v1.5 produces 768-d vectors
 
 
 def test_embed_links_to_representation(project):
@@ -72,7 +72,7 @@ def test_embed_links_to_representation(project):
 
     emb = conn.execute("SELECT * FROM embeddings").fetchone()
     assert emb is not None
-    assert emb["model_name"] == "all-MiniLM-L6-v2"
+    assert emb["model_name"] == plan.embedding.model_name
     assert emb["dimensions"] > 0
 
     # Verify the FK link.

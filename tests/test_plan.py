@@ -19,8 +19,8 @@ from fluster.config.plan import (
 
 def test_default_plan_structure():
     plan = Plan()
-    assert plan.embedding.model_name == "all-MiniLM-L6-v2"
-    assert plan.embedding.max_tokens == 256
+    assert plan.embedding.model_name == "nomic-ai/nomic-embed-text-v1.5"
+    assert plan.embedding.max_tokens == 8192
     assert len(plan.reductions) == 3
     assert len(plan.clustering) == 1
     assert plan.llm.provider == LLMProvider.openai
@@ -84,7 +84,7 @@ def test_save_produces_readable_yaml(tmp_path):
     save_plan(plan, path)
 
     raw = yaml.safe_load(path.read_text())
-    assert raw["embedding"]["model_name"] == "all-MiniLM-L6-v2"
+    assert raw["embedding"]["model_name"] == "nomic-ai/nomic-embed-text-v1.5"
     assert raw["llm"]["provider"] == "openai"
     assert len(raw["reductions"]) == 3
 
@@ -96,7 +96,7 @@ def test_load_partial_yaml(tmp_path):
 
     plan = load_plan(path)
     assert plan.embedding.model_name == "custom-model"
-    assert plan.embedding.max_tokens == 256  # default
+    assert plan.embedding.max_tokens == 8192  # default
     assert len(plan.reductions) == 3  # defaults
     assert plan.llm.provider == LLMProvider.openai  # default
 

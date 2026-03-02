@@ -16,6 +16,8 @@ class ClusterLabel(BaseModel):
     keywords: list[str]
 
 
+_EXEMPLAR_TEXT_LIMIT = 500  # chars; keeps LLM prompt size manageable
+
 _PROMPT_TEMPLATE = """You are labeling a cluster of items. Below are representative examples (exemplars) from the cluster, along with the cluster size.
 
 Cluster size: {cluster_size}
@@ -58,7 +60,7 @@ def _get_exemplar_texts(
         """,
         (cluster_run_id, cluster_id),
     ).fetchall()
-    return [r["text"] for r in rows]
+    return [r["text"][:_EXEMPLAR_TEXT_LIMIT] for r in rows]
 
 
 def _label_exists(

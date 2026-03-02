@@ -13,8 +13,9 @@ from fluster.config.settings import SEED
 
 
 class EmbeddingConfig(BaseModel):
-    model_name: str = "all-MiniLM-L6-v2"
-    max_tokens: int = 256
+    model_name: str = "nomic-ai/nomic-embed-text-v1.5"
+    max_tokens: int = 8192
+    task_prefix: str = "clustering: "  # nomic requires a task prefix; set "" for other models
 
 
 class PCAReduction(BaseModel):

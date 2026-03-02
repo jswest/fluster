@@ -36,7 +36,10 @@ def embed_items(
     Returns a summary dict with counts.
     """
     model_name = plan.embedding.model_name
-    model = SentenceTransformer(model_name)
+    max_tokens = plan.embedding.max_tokens
+    # trust_remote_code is required by nomic-embed-text-v1.5's custom architecture
+    model = SentenceTransformer(model_name, trust_remote_code=True)
+    tokenizer = model.tokenizer
     dimensions = model.get_sentence_embedding_dimension()
 
     ensure_vec_table(conn, dimensions)
@@ -64,7 +67,13 @@ def embed_items(
 
     for batch_start in batch_iter:
         batch = reps[batch_start : batch_start + _BATCH_SIZE]
-        texts = [r["text"] for r in batch]
+        texts = []
+        for r in batch:
+            text = r["text"]
+            tokens = tokenizer.encode(text, add_special_tokens=False)
+            if len(tokens) > max_tokens:
+                text = tokenizer.decode(tokens[:max_tokens])
+            texts.append(plan.embedding.task_prefix + text)
         vectors = model.encode(texts, normalize_embeddings=True)
 
         for rep, vector in zip(batch, vectors):
