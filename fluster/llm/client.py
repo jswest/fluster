@@ -39,7 +39,6 @@ def _call_openai(prompt: str, config: LLMConfig) -> str:
     response = client.chat.completions.create(
         model=config.model,
         messages=[{"role": "user", "content": prompt}],
-        temperature=0,
     )
     return response.choices[0].message.content
 
