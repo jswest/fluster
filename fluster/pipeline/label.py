@@ -4,6 +4,7 @@ import json
 import sqlite3
 
 from pydantic import BaseModel
+from tqdm import tqdm
 
 from fluster.config.plan import LLMConfig
 from fluster.llm.client import generate_json
@@ -96,7 +97,8 @@ def label_clusters(
     labeled = 0
     skipped = 0
 
-    for cluster_id, cluster_size in clusters:
+    for cluster_id, cluster_size in tqdm(clusters, desc="Labeling", unit="cluster",
+                                            disable=len(clusters) == 0):
         if _label_exists(conn, cluster_run_id, cluster_id, config):
             skipped += 1
             continue
