@@ -145,9 +145,10 @@ def config():
         current = secrets.get("openai_api_key", "")
         hint = f" (current: ...{current[-4:]})" if current else ""
         key = typer.prompt(
-            f"OpenAI API key{hint}", hide_input=True,
+            f"OpenAI API key{hint}", default=current, hide_input=True,
         ).strip()
-        secrets["openai_api_key"] = key
+        if key:
+            secrets["openai_api_key"] = key
     elif provider == "ollama":
         console.print("Ollama runs locally — no API key needed.")
         return
