@@ -185,10 +185,13 @@ CREATE TABLE IF NOT EXISTS cluster_summaries (
     cluster_summary_id  INTEGER PRIMARY KEY AUTOINCREMENT,
     cluster_run_id      INTEGER NOT NULL,
     cluster_id          INTEGER NOT NULL,
+    provider            TEXT NOT NULL,
+    model               TEXT NOT NULL,
     label               TEXT NOT NULL,
     label_json          TEXT NOT NULL,
     created_at          TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (cluster_run_id) REFERENCES cluster_runs (cluster_run_id),
+    UNIQUE (cluster_run_id, cluster_id, provider, model),
     CHECK (json_valid(label_json))
 );
 """
@@ -196,10 +199,14 @@ CREATE TABLE IF NOT EXISTS cluster_summaries (
 
 CRITIQUE_TABLES_SQL = """
 CREATE TABLE IF NOT EXISTS cluster_run_critiques (
-    cluster_run_id  INTEGER PRIMARY KEY,
+    critique_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    cluster_run_id  INTEGER NOT NULL,
+    provider        TEXT NOT NULL,
+    model           TEXT NOT NULL,
     critique_json   TEXT NOT NULL,
     created_at      TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (cluster_run_id) REFERENCES cluster_runs (cluster_run_id),
+    UNIQUE (cluster_run_id, provider, model),
     CHECK (json_valid(critique_json))
 );
 """

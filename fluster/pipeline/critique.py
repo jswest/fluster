@@ -113,8 +113,12 @@ def _get_cluster_labels(conn: sqlite3.Connection, cluster_run_id: int) -> str:
     """Format cluster labels for the prompt."""
     rows = conn.execute(
         "SELECT cluster_id, label FROM cluster_summaries "
-        "WHERE cluster_run_id = ? ORDER BY cluster_id",
-        (cluster_run_id,),
+        "WHERE cluster_run_id = ? "
+        "AND cluster_summary_id IN ("
+        "  SELECT MAX(cluster_summary_id) FROM cluster_summaries "
+        "  WHERE cluster_run_id = ? GROUP BY cluster_id"
+        ") ORDER BY cluster_id",
+        (cluster_run_id, cluster_run_id),
     ).fetchall()
 
     if not rows:
@@ -123,11 +127,14 @@ def _get_cluster_labels(conn: sqlite3.Connection, cluster_run_id: int) -> str:
     return "\n".join(f"- Cluster {r['cluster_id']}: {r['label']}" for r in rows)
 
 
-def _critique_exists(conn: sqlite3.Connection, cluster_run_id: int) -> bool:
-    """Check if a critique already exists for this run."""
+def _critique_exists(
+    conn: sqlite3.Connection, cluster_run_id: int, config: LLMConfig,
+) -> bool:
+    """Check if a critique already exists for this run from this LLM."""
     row = conn.execute(
-        "SELECT 1 FROM cluster_run_critiques WHERE cluster_run_id = ?",
-        (cluster_run_id,),
+        "SELECT 1 FROM cluster_run_critiques "
+        "WHERE cluster_run_id = ? AND provider = ? AND model = ?",
+        (cluster_run_id, config.provider.value, config.model),
     ).fetchone()
     return row is not None
 
@@ -147,7 +154,7 @@ def critique_clusters(
 
     Returns a summary dict.
     """
-    if _critique_exists(conn, cluster_run_id):
+    if _critique_exists(conn, cluster_run_id, config):
         return {"critiqued": False, "skipped": True}
 
     metrics = _compute_metrics(conn, cluster_run_id)
@@ -179,9 +186,11 @@ def critique_clusters(
     critique_data["metrics"] = metrics
 
     conn.execute(
-        "INSERT INTO cluster_run_critiques (cluster_run_id, critique_json) "
-        "VALUES (?, ?)",
-        (cluster_run_id, json.dumps(critique_data)),
+        "INSERT INTO cluster_run_critiques "
+        "(cluster_run_id, provider, model, critique_json) "
+        "VALUES (?, ?, ?, ?)",
+        (cluster_run_id, config.provider.value, config.model,
+         json.dumps(critique_data)),
     )
     conn.commit()
 

@@ -77,8 +77,9 @@ def _seed_cluster_run(conn, n_items=5, with_labels=True, with_umap2=True):
                 "keywords": ["test"],
             })
             conn.execute(
-                "INSERT INTO cluster_summaries (cluster_run_id, cluster_id, label, label_json) "
-                "VALUES (?, ?, ?, ?)",
+                "INSERT INTO cluster_summaries "
+                "(cluster_run_id, cluster_id, provider, model, label, label_json) "
+                "VALUES (?, ?, 'openai', 'gpt-5-nano', ?, ?)",
                 (run_id, cid, f"Cluster {cid}", label_json),
             )
 

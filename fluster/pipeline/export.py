@@ -25,6 +25,10 @@ JOIN items i ON ca.item_id = i.item_id
 JOIN rows r ON i.row_id = r.row_id
 LEFT JOIN cluster_summaries cs
   ON ca.cluster_run_id = cs.cluster_run_id AND ca.cluster_id = cs.cluster_id
+  AND cs.cluster_summary_id = (
+      SELECT MAX(cs2.cluster_summary_id) FROM cluster_summaries cs2
+      WHERE cs2.cluster_run_id = ca.cluster_run_id AND cs2.cluster_id = ca.cluster_id
+  )
 LEFT JOIN reduction_coordinates rc
   ON ca.item_id = rc.item_id AND rc.reduction_id = ?
 WHERE ca.cluster_run_id = ?

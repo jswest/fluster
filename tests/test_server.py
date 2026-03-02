@@ -160,8 +160,9 @@ def test_get_cluster_run_detail(client, named_project):
         "keywords": ["test"],
     })
     conn.execute(
-        "INSERT INTO cluster_summaries (cluster_run_id, cluster_id, label, label_json) "
-        "VALUES (?, 0, 'Test Cluster', ?)",
+        "INSERT INTO cluster_summaries "
+        "(cluster_run_id, cluster_id, provider, model, label, label_json) "
+        "VALUES (?, 0, 'openai', 'gpt-5-nano', 'Test Cluster', ?)",
         (run_id, label_data),
     )
 
@@ -172,8 +173,9 @@ def test_get_cluster_run_detail(client, named_project):
         "recommendations": ["None."],
     })
     conn.execute(
-        "INSERT INTO cluster_run_critiques (cluster_run_id, critique_json) "
-        "VALUES (?, ?)",
+        "INSERT INTO cluster_run_critiques "
+        "(cluster_run_id, provider, model, critique_json) "
+        "VALUES (?, 'openai', 'gpt-5-nano', ?)",
         (run_id, critique_data),
     )
 

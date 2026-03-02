@@ -62,13 +62,15 @@ def _get_exemplar_texts(
 
 
 def _label_exists(
-    conn: sqlite3.Connection, cluster_run_id: int, cluster_id: int
+    conn: sqlite3.Connection, cluster_run_id: int, cluster_id: int,
+    config: LLMConfig,
 ) -> bool:
-    """Check if a label already exists for this cluster."""
+    """Check if a label already exists for this cluster from this LLM."""
     row = conn.execute(
         "SELECT 1 FROM cluster_summaries "
-        "WHERE cluster_run_id = ? AND cluster_id = ?",
-        (cluster_run_id, cluster_id),
+        "WHERE cluster_run_id = ? AND cluster_id = ? "
+        "AND provider = ? AND model = ?",
+        (cluster_run_id, cluster_id, config.provider.value, config.model),
     ).fetchone()
     return row is not None
 
@@ -93,7 +95,7 @@ def label_clusters(
     skipped = 0
 
     for cluster_id, cluster_size in clusters:
-        if _label_exists(conn, cluster_run_id, cluster_id):
+        if _label_exists(conn, cluster_run_id, cluster_id, config):
             skipped += 1
             continue
         exemplar_texts = _get_exemplar_texts(conn, cluster_run_id, cluster_id)
@@ -125,11 +127,13 @@ def label_clusters(
 
         conn.execute(
             "INSERT INTO cluster_summaries "
-            "(cluster_run_id, cluster_id, label, label_json) "
-            "VALUES (?, ?, ?, ?)",
+            "(cluster_run_id, cluster_id, provider, model, label, label_json) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
             (
                 cluster_run_id,
                 cluster_id,
+                config.provider.value,
+                config.model,
                 result.label,
                 json.dumps(result.model_dump()),
             ),

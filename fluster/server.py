@@ -230,8 +230,12 @@ def get_cluster_run(
 
     label_rows = conn.execute(
         "SELECT cluster_id, label, label_json FROM cluster_summaries "
-        "WHERE cluster_run_id = ? ORDER BY cluster_id",
-        (cluster_run_id,),
+        "WHERE cluster_run_id = ? "
+        "AND cluster_summary_id IN ("
+        "  SELECT MAX(cluster_summary_id) FROM cluster_summaries "
+        "  WHERE cluster_run_id = ? GROUP BY cluster_id"
+        ") ORDER BY cluster_id",
+        (cluster_run_id, cluster_run_id),
     ).fetchall()
     labels = [
         ClusterSummary(
@@ -244,7 +248,7 @@ def get_cluster_run(
 
     critique_row = conn.execute(
         "SELECT critique_json FROM cluster_run_critiques "
-        "WHERE cluster_run_id = ?",
+        "WHERE cluster_run_id = ? ORDER BY critique_id DESC LIMIT 1",
         (cluster_run_id,),
     ).fetchone()
     critique = json.loads(critique_row["critique_json"]) if critique_row else None
