@@ -45,21 +45,30 @@ export function getRun(clusterRunId: number) {
 }
 
 export function getClusterDetails(clusterRunId: number) {
-	return db
+	const sizes = db
 		.select({
-			clusterId: clusterSummaries.clusterId,
-			label: clusterSummaries.label,
-			size: sql<number>`(
-				SELECT COUNT(*)
-				FROM cluster_assignments
-				WHERE cluster_run_id = ${clusterSummaries.clusterRunId}
-				AND cluster_id = ${clusterSummaries.clusterId}
-			)`
+			clusterId: clusterAssignments.clusterId,
+			size: sql<number>`COUNT(*)`
 		})
+		.from(clusterAssignments)
+		.where(eq(clusterAssignments.clusterRunId, clusterRunId))
+		.groupBy(clusterAssignments.clusterId)
+		.all();
+
+	const sizeMap = new Map(sizes.map((s) => [s.clusterId, s.size]));
+
+	const labels = db
+		.select()
 		.from(clusterSummaries)
 		.where(eq(clusterSummaries.clusterRunId, clusterRunId))
 		.orderBy(clusterSummaries.clusterId)
 		.all();
+
+	return labels.map((l) => ({
+		clusterId: l.clusterId,
+		label: l.label,
+		size: sizeMap.get(l.clusterId) ?? 0
+	}));
 }
 
 export type CritiqueData = {
