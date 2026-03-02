@@ -182,13 +182,6 @@ def plan_cmd():
         plan_path = project_path / settings.PLAN_YAML
         plan = load_plan(plan_path)
 
-        plan.embedding.model_name = typer.prompt(
-            "Embedding model", default=plan.embedding.model_name,
-        )
-        plan.embedding.max_tokens = typer.prompt(
-            "Embedding max tokens", default=plan.embedding.max_tokens, type=int,
-        )
-
         provider_str = typer.prompt(
             "LLM provider (openai/ollama)", default=plan.llm.provider.value,
         ).strip().lower()
@@ -198,17 +191,46 @@ def plan_cmd():
             "LLM model", default=plan.llm.model,
         )
 
-        min_cluster = plan.clustering[0].params.get("min_cluster_size", 5)
+        cluster = plan.clustering[0]
+
+        min_cluster = cluster.params.get("min_cluster_size", 5)
         min_cluster = typer.prompt(
             "HDBSCAN min_cluster_size", default=min_cluster, type=int,
         )
-        plan.clustering[0].params["min_cluster_size"] = min_cluster
+        cluster.params["min_cluster_size"] = min_cluster
+
+        min_samples = cluster.params.get("min_samples", min_cluster)
+        min_samples = typer.prompt(
+            "HDBSCAN min_samples", default=min_samples, type=int,
+        )
+        if min_samples < 1:
+            console.print("[red]min_samples must be >= 1.[/red]")
+            raise typer.Exit(code=1)
+        cluster.params["min_samples"] = min_samples
+
+        method = cluster.params.get("cluster_selection_method", "eom")
+        method = typer.prompt(
+            "HDBSCAN cluster_selection_method (eom/leaf)", default=method,
+        ).strip().lower()
+        if method not in ("eom", "leaf"):
+            console.print(f"[red]Invalid method '{method}'. Must be 'eom' or 'leaf'.[/red]")
+            raise typer.Exit(code=1)
+        cluster.params["cluster_selection_method"] = method
+
+        epsilon = cluster.params.get("cluster_selection_epsilon", 0.0)
+        epsilon = typer.prompt(
+            "HDBSCAN cluster_selection_epsilon", default=epsilon, type=float,
+        )
+        if epsilon < 0.0:
+            console.print("[red]cluster_selection_epsilon must be >= 0.0.[/red]")
+            raise typer.Exit(code=1)
+        cluster.params["cluster_selection_epsilon"] = epsilon
 
         save_plan(plan, plan_path)
         console.print(f"\nPlan saved to {plan_path}")
-        console.print(f"  Embedding:  {plan.embedding.model_name} (max {plan.embedding.max_tokens} tokens)")
         console.print(f"  LLM:        {plan.llm.provider.value} / {plan.llm.model}")
-        console.print(f"  Clustering:  min_cluster_size={min_cluster}")
+        console.print(f"  Clustering:  min_cluster_size={min_cluster}, min_samples={min_samples}")
+        console.print(f"               cluster_selection_method={method}, epsilon={epsilon}")
 
 
 @app.command(name="ingest-rows")
