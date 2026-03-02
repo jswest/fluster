@@ -40,27 +40,6 @@
 </div>
 
 <style>
-	table {
-		width: 100%;
-		border-collapse: collapse;
-	}
-
-	th {
-		text-align: left;
-		border-bottom: 2px solid var(--color-primary-dark);
-		padding: 0.5rem 0.75rem;
-		font-weight: 600;
-	}
-
-	td {
-		padding: 0.5rem 0.75rem;
-		border-bottom: 1px solid var(--color-secondary-dark);
-	}
-
-	tr:hover td {
-		background: var(--color-secondary-light);
-	}
-
 	a {
 		color: inherit;
 		text-decoration: none;

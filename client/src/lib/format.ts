@@ -15,3 +15,7 @@ export function formatTime(iso: string | null): string {
 	if (!iso) return '\u2014';
 	return new Date(iso + 'Z').toLocaleString();
 }
+
+export function formatPercent(n: number): string {
+	return (n * 100).toFixed(1) + '%';
+}

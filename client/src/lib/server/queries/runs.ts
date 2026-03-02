@@ -24,6 +24,11 @@ export function getRuns() {
 				SELECT COUNT(*)
 				FROM cluster_assignments
 				WHERE cluster_run_id = ${clusterRuns.clusterRunId}
+			)`,
+			nNoise: sql<number>`(
+				SELECT COUNT(*)
+				FROM cluster_assignments
+				WHERE cluster_run_id = ${clusterRuns.clusterRunId} AND cluster_id < 0
 			)`
 		})
 		.from(clusterRuns)
@@ -39,16 +44,32 @@ export function getRun(clusterRunId: number) {
 		.get();
 }
 
-export function getClusterLabels(clusterRunId: number) {
+export function getClusterDetails(clusterRunId: number) {
 	return db
-		.select()
+		.select({
+			clusterId: clusterSummaries.clusterId,
+			label: clusterSummaries.label,
+			size: sql<number>`(
+				SELECT COUNT(*)
+				FROM cluster_assignments
+				WHERE cluster_run_id = ${clusterSummaries.clusterRunId}
+				AND cluster_id = ${clusterSummaries.clusterId}
+			)`
+		})
 		.from(clusterSummaries)
 		.where(eq(clusterSummaries.clusterRunId, clusterRunId))
 		.orderBy(clusterSummaries.clusterId)
 		.all();
 }
 
-export function getCritique(clusterRunId: number) {
+export type CritiqueData = {
+	verdict?: string;
+	quality_score?: number;
+	recommendations?: string[];
+	metrics?: Record<string, unknown>;
+};
+
+export function getCritique(clusterRunId: number): CritiqueData | undefined {
 	const row = db
 		.select({ critiqueJson: clusterRunCritiques.critiqueJson })
 		.from(clusterRunCritiques)
@@ -57,7 +78,7 @@ export function getCritique(clusterRunId: number) {
 
 	if (!row) return undefined;
 	try {
-		return JSON.parse(row.critiqueJson) as Record<string, unknown>;
+		return JSON.parse(row.critiqueJson) as CritiqueData;
 	} catch {
 		return undefined;
 	}
