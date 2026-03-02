@@ -226,11 +226,16 @@ def plan_cmd():
             raise typer.Exit(code=1)
         cluster.params["cluster_selection_epsilon"] = epsilon
 
+        caption = plan.images.caption
+        caption = typer.confirm("Caption images with FastVLM?", default=caption)
+        plan.images.caption = caption
+
         save_plan(plan, plan_path)
         console.print(f"\nPlan saved to {plan_path}")
         console.print(f"  LLM:        {plan.llm.provider.value} / {plan.llm.model}")
         console.print(f"  Clustering:  min_cluster_size={min_cluster}, min_samples={min_samples}")
         console.print(f"               cluster_selection_method={method}, epsilon={epsilon}")
+        console.print(f"  Images:      caption={'on' if caption else 'off'}")
 
 
 @app.command(name="ingest-rows")

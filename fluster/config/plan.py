@@ -38,6 +38,10 @@ class ClusteringConfig(BaseModel):
     params: dict = Field(default_factory=lambda: {"min_cluster_size": 5})
 
 
+class ImageConfig(BaseModel):
+    caption: bool = True
+
+
 class LLMProvider(str, Enum):
     openai = "openai"
     ollama = "ollama"
@@ -62,6 +66,7 @@ class Plan(BaseModel):
         default_factory=lambda: [ClusteringConfig()]
     )
     llm: LLMConfig = Field(default_factory=LLMConfig)
+    images: ImageConfig = Field(default_factory=ImageConfig)
 
 
 def load_plan(plan_path: Path) -> Plan:

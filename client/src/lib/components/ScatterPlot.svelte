@@ -319,7 +319,9 @@
 					/>
 				{/if}
 				<div class="tooltip-name">{hoveredPoint.recordName || 'unnamed'}</div>
-				<div class="tooltip-preview">{hoveredPoint.embeddingTextPreview.slice(0, 80)}{hoveredPoint.embeddingTextPreview.length > 80 ? '...' : ''}</div>
+				{#if hoveredPoint.embeddingTextPreview}
+					<div class="tooltip-preview">{hoveredPoint.embeddingTextPreview.slice(0, 80)}{hoveredPoint.embeddingTextPreview.length > 80 ? '...' : ''}</div>
+				{/if}
 				<div class="tooltip-cluster muted">cluster {hoveredPoint.clusterId}</div>
 			</div>
 		{/if}

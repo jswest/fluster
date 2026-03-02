@@ -99,15 +99,17 @@
 				</div>
 			{/if}
 
-			<div class="field">
-				<span class="muted">{item.imageArtifactId ? 'Caption' : 'Embedding Text'}</span>
-				<pre class="embedding-text">{displayText}</pre>
-				{#if canExpand}
-					<button class="expand-btn" onclick={() => expanded = !expanded}>
-						{expanded ? 'Collapse' : 'Expand full text'}
-					</button>
-				{/if}
-			</div>
+			{#if item.embeddingText.trim()}
+				<div class="field">
+					<span class="muted">{item.imageArtifactId ? 'Caption' : 'Embedding Text'}</span>
+					<pre class="embedding-text">{displayText}</pre>
+					{#if canExpand}
+						<button class="expand-btn" onclick={() => expanded = !expanded}>
+							{expanded ? 'Collapse' : 'Expand full text'}
+						</button>
+					{/if}
+				</div>
+			{/if}
 		</div>
 	{/if}
 </div>

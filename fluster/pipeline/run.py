@@ -63,7 +63,7 @@ def run_pipeline(
 
     # Step 1: materialize
     log_job(conn, job_id, "Starting materialize_items")
-    result = materialize_items(conn, project_path)
+    result = materialize_items(conn, project_path, caption_images=plan.images.caption)
     log_job(conn, job_id, "materialize_items complete", payload=result)
     _step("materialize")
     _check_cancel(conn, job_id)

@@ -8,7 +8,7 @@ from pathlib import Path
 from loguru import logger
 from tqdm import tqdm
 
-_caption_model = None
+_caption_cache = None
 
 
 def _is_image(mime_type: str | None) -> bool:
@@ -16,75 +16,49 @@ def _is_image(mime_type: str | None) -> bool:
 
 
 def _load_caption_model():
-    """Lazy-load moondream2 for image captioning. Cached after first call."""
-    global _caption_model
-    if _caption_model is not None:
-        return _caption_model
-
-    import warnings
+    """Lazy-load FastVLM-0.5B for image captioning. Cached after first call."""
+    global _caption_cache
+    if _caption_cache is not None:
+        return _caption_cache
 
     import torch
-    import transformers
-    from transformers import AutoModelForCausalLM, PreTrainedModel
+    from transformers import AutoProcessor, FastVlmForConditionalGeneration
 
-    logger.info("Loading moondream2 caption model...")
+    logger.info("Loading FastVLM-0.5B caption model...")
 
-    # Workaround: moondream2's HfMoondream.__init__ doesn't call post_init(),
-    # but transformers >=5.1.0 expects all_tied_weights_keys to exist during
-    # from_pretrained(). Temporarily patch PreTrainedModel.__init__ to set
-    # the missing attribute so from_pretrained() doesn't crash.
-    _orig_init = PreTrainedModel.__init__
+    if torch.backends.mps.is_available():
+        device = torch.device("mps")
+    elif torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
 
-    def _patched_init(self, *args, **kwargs):
-        _orig_init(self, *args, **kwargs)
-        if not hasattr(self, "all_tied_weights_keys"):
-            self.all_tied_weights_keys = {}
+    model = FastVlmForConditionalGeneration.from_pretrained(
+        "apple/FastVLM-0.5B", torch_dtype=torch.float32,
+    ).to(device)
+    model.eval()
+    processor = AutoProcessor.from_pretrained("apple/FastVLM-0.5B")
 
-    PreTrainedModel.__init__ = _patched_init
-
-    prev_verbosity = transformers.logging.get_verbosity()
-    transformers.logging.set_verbosity_error()
-    try:
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", message="`torch_dtype` is deprecated")
-            warnings.filterwarnings("ignore", message=".*unauthenticated.*")
-
-            # moondream2 is incompatible with MPS (NaN, mixed-dtype crashes).
-            # Use CUDA when available, otherwise CPU.
-            if torch.cuda.is_available():
-                device = "cuda"
-                load_kwargs = {"dtype": torch.float16}
-            else:
-                device = "cpu"
-                load_kwargs = {"dtype": torch.float32}
-
-            _caption_model = AutoModelForCausalLM.from_pretrained(
-                "vikhyatk/moondream2",
-                revision="2025-06-21",
-                trust_remote_code=True,
-                **load_kwargs,
-            ).to(device)
-    finally:
-        PreTrainedModel.__init__ = _orig_init
-        transformers.logging.set_verbosity(prev_verbosity)
-
-    logger.info(f"moondream2 loaded on {_caption_model.device} ({_caption_model.dtype})")
-    _caption_model.eval()
-    return _caption_model
+    _caption_cache = (model, processor, device)
+    logger.info(f"FastVLM loaded on {device}")
+    return _caption_cache
 
 
-def _caption_image(stored_path: str, project_dir: Path, model) -> str:
-    """Generate a text caption for an image using moondream2."""
+def _caption_image(stored_path: str, project_dir: Path, model, processor, device) -> str:
+    """Generate a text caption for an image using FastVLM."""
     from PIL import Image
 
     full_path = project_dir / "artifacts" / stored_path
     try:
         img = Image.open(full_path).convert("RGB")
-        result = model.caption(img, length="normal")
-        # moondream2 returns a dict with "caption" key or a string
-        if isinstance(result, dict):
-            return result.get("caption", "")
-        return str(result)
+        messages = [{"role": "user", "content": [
+            {"type": "image"},
+            {"type": "text", "text": "Describe this image in one sentence."},
+        ]}]
+        prompt = processor.apply_chat_template(messages, add_generation_prompt=True)
+        inputs = processor(text=prompt, images=[img], return_tensors="pt").to(device)
+        output = model.generate(**inputs, max_new_tokens=100)
+        return processor.decode(output[0], skip_special_tokens=True).strip()
     except Exception as e:
         logger.warning(f"Failed to caption image {full_path}: {e}")
         return ""
@@ -127,6 +101,7 @@ def _text_hash(text: str) -> str:
 def materialize_items(
     conn: sqlite3.Connection,
     project_dir: Path,
+    caption_images: bool = True,
 ) -> dict:
     """Build embedding_text representations for all items that lack one.
 
@@ -154,7 +129,7 @@ def materialize_items(
 
         # Get all artifacts for this item.
         artifacts = conn.execute(
-            "SELECT a.stored_path, a.mime_type FROM item_artifacts ia "
+            "SELECT a.stored_path, a.original_path, a.mime_type FROM item_artifacts ia "
             "JOIN artifacts a ON ia.artifact_id = a.artifact_id "
             "WHERE ia.item_id = ?",
             (item_id,),
@@ -164,8 +139,11 @@ def materialize_items(
         extracted_parts = []
         for artifact in artifacts:
             if _is_image(artifact["mime_type"]):
-                model = _load_caption_model()
-                text = _caption_image(artifact["stored_path"], project_dir, model)
+                if caption_images:
+                    model, processor, device = _load_caption_model()
+                    text = _caption_image(artifact["stored_path"], project_dir, model, processor, device)
+                else:
+                    text = ""
             else:
                 text = _extract_text(artifact["stored_path"], project_dir)
             if text.strip():
@@ -176,8 +154,12 @@ def materialize_items(
         embedding_text = _build_embedding_text(row_name, metadata, extracted_text)
 
         if not embedding_text.strip():
-            skipped += 1
-            continue
+            # Use artifact filename as fallback so item appears in scatter plot
+            if artifacts:
+                embedding_text = Path(artifacts[0]["original_path"]).stem
+            if not embedding_text.strip():
+                skipped += 1
+                continue
 
         conn.execute(
             "INSERT INTO representations "

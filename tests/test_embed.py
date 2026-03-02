@@ -214,10 +214,14 @@ def _create_test_image(path, width=4, height=4):
     return path
 
 
-def _mock_caption_model():
-    model = MagicMock()
-    model.caption.return_value = {"caption": "A test image"}
-    return model
+def _patch_caption(monkeypatch):
+    """Patch _load_caption_model and _caption_image to avoid loading FastVLM."""
+    sentinel = (MagicMock(name="fake-model"), MagicMock(name="fake-processor"), "cpu")
+    monkeypatch.setattr(materialize_mod, "_load_caption_model", lambda: sentinel)
+    monkeypatch.setattr(
+        materialize_mod, "_caption_image",
+        lambda stored_path, project_dir, model, processor, device: "A test image",
+    )
 
 
 def _fake_embed_images(conn, image_reps, project_dir, dimensions):
@@ -250,8 +254,7 @@ def _setup_image_item(pdir, conn, monkeypatch):
     img_file = pdir / "photo.png"
     _create_test_image(img_file)
 
-    mock_caption = _mock_caption_model()
-    monkeypatch.setattr(materialize_mod, "_caption_model", mock_caption)
+    _patch_caption(monkeypatch)
 
     csv_file = pdir / "data.csv"
     csv_file.write_text(f"name,file_path\nphoto,{img_file}\n")
@@ -287,8 +290,7 @@ def test_embed_mixed_text_and_image(project, monkeypatch):
     img_file = pdir / "photo.png"
     _create_test_image(img_file)
 
-    mock_caption = _mock_caption_model()
-    monkeypatch.setattr(materialize_mod, "_caption_model", mock_caption)
+    _patch_caption(monkeypatch)
 
     csv_file = pdir / "data.csv"
     csv_file.write_text(f"name,file_path\ndoc,{txt_file}\nphoto,{img_file}\n")

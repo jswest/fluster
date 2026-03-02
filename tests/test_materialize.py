@@ -213,11 +213,18 @@ def _create_test_image(path, width=4, height=4):
     return path
 
 
-def _mock_caption_model():
-    """Create a mock moondream2 model that returns a fixed caption."""
-    model = MagicMock()
-    model.caption.return_value = {"caption": "A test image of a red square"}
-    return model
+def _patch_caption(monkeypatch, caption_text="A test image of a red square"):
+    """Patch _load_caption_model and _caption_image to avoid loading FastVLM."""
+    sentinel = (MagicMock(name="fake-model"), MagicMock(name="fake-processor"), "cpu")
+    monkeypatch.setattr(materialize_mod, "_load_caption_model", lambda: sentinel)
+    calls = []
+
+    def _fake_caption(stored_path, project_dir, model, processor, device):
+        calls.append(stored_path)
+        return caption_text
+
+    monkeypatch.setattr(materialize_mod, "_caption_image", _fake_caption)
+    return calls
 
 
 def test_materialize_image_creates_caption(project, monkeypatch):
@@ -227,19 +234,18 @@ def test_materialize_image_creates_caption(project, monkeypatch):
     img_file = pdir / "photo.png"
     _create_test_image(img_file)
 
-    mock_model = _mock_caption_model()
-    monkeypatch.setattr(materialize_mod, "_caption_model", mock_model)
+    calls = _patch_caption(monkeypatch)
 
     summary = _ingest_and_materialize(
         pdir, conn, "name,file_path", f"my-photo,{img_file}"
     )
 
     assert summary["materialized"] == 1
+    assert len(calls) == 1
 
     rep = conn.execute("SELECT text FROM representations").fetchone()
     assert "my-photo" in rep["text"]
     assert "A test image of a red square" in rep["text"]
-    mock_model.caption.assert_called_once()
 
 
 def test_materialize_mixed_text_and_image(project, monkeypatch):
@@ -252,8 +258,7 @@ def test_materialize_mixed_text_and_image(project, monkeypatch):
     img_file = pdir / "photo.jpg"
     _create_test_image(img_file)
 
-    mock_model = _mock_caption_model()
-    monkeypatch.setattr(materialize_mod, "_caption_model", mock_model)
+    _patch_caption(monkeypatch)
 
     summary = _ingest_and_materialize(
         pdir, conn, "name,file_path",
@@ -280,8 +285,7 @@ def test_materialize_image_with_metadata(project, monkeypatch):
     img_file = pdir / "sunset.png"
     _create_test_image(img_file)
 
-    mock_model = _mock_caption_model()
-    monkeypatch.setattr(materialize_mod, "_caption_model", mock_model)
+    _patch_caption(monkeypatch)
 
     _ingest_and_materialize(
         pdir, conn, "name,category,file_path",
@@ -301,9 +305,7 @@ def test_materialize_image_caption_failure_falls_back(project, monkeypatch):
     img_file = pdir / "broken.png"
     _create_test_image(img_file)
 
-    mock_model = MagicMock()
-    mock_model.caption.side_effect = RuntimeError("model error")
-    monkeypatch.setattr(materialize_mod, "_caption_model", mock_model)
+    _patch_caption(monkeypatch, caption_text="")
 
     summary = _ingest_and_materialize(
         pdir, conn, "name,category,file_path",
@@ -317,20 +319,69 @@ def test_materialize_image_caption_failure_falls_back(project, monkeypatch):
     assert "category: Art" in rep["text"]
 
 
-def test_materialize_image_empty_caption_no_metadata_skipped(project, monkeypatch):
-    """An image with no name, no metadata, and empty caption should be skipped."""
+def test_materialize_image_empty_caption_no_metadata_gets_filename(project, monkeypatch):
+    """An image with no name, no metadata, and empty caption should use filename as fallback."""
     pdir, conn = project
 
     img_file = pdir / "empty.png"
     _create_test_image(img_file)
 
-    mock_model = MagicMock()
-    mock_model.caption.return_value = {"caption": ""}
-    monkeypatch.setattr(materialize_mod, "_caption_model", mock_model)
+    _patch_caption(monkeypatch, caption_text="")
 
     summary = _ingest_and_materialize(
         pdir, conn, "file_path", f"{img_file}"
     )
 
-    assert summary["skipped"] == 1
-    assert summary["materialized"] == 0
+    assert summary["materialized"] == 1
+    assert summary["skipped"] == 0
+
+    rep = conn.execute("SELECT text FROM representations").fetchone()
+    assert "empty" in rep["text"]
+
+
+def test_materialize_caption_images_false_skips_model(project, monkeypatch):
+    """caption_images=False skips captioning; item still gets representation from name."""
+    pdir, conn = project
+
+    img_file = pdir / "photo.png"
+    _create_test_image(img_file)
+
+    load_calls = []
+    monkeypatch.setattr(
+        materialize_mod, "_load_caption_model",
+        lambda: load_calls.append(1) or MagicMock(),
+    )
+
+    csv_file = _write_csv(pdir, "name,file_path", f"my-photo,{img_file}")
+    ingest_rows(conn, csv_file, pdir)
+    summary = materialize_items(conn, pdir, caption_images=False)
+
+    assert summary["materialized"] == 1
+    assert len(load_calls) == 0
+
+    rep = conn.execute("SELECT text FROM representations").fetchone()
+    assert "my-photo" in rep["text"]
+
+
+def test_materialize_caption_images_false_no_name_gets_filename(project, monkeypatch):
+    """caption_images=False with no name/metadata uses filename as fallback."""
+    pdir, conn = project
+
+    img_file = pdir / "landscape.png"
+    _create_test_image(img_file)
+
+    load_calls = []
+    monkeypatch.setattr(
+        materialize_mod, "_load_caption_model",
+        lambda: load_calls.append(1) or MagicMock(),
+    )
+
+    csv_file = _write_csv(pdir, "file_path", f"{img_file}")
+    ingest_rows(conn, csv_file, pdir)
+    summary = materialize_items(conn, pdir, caption_images=False)
+
+    assert summary["materialized"] == 1
+    assert len(load_calls) == 0
+
+    rep = conn.execute("SELECT text FROM representations").fetchone()
+    assert "landscape" in rep["text"]
