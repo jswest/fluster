@@ -4,6 +4,7 @@
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import Input from '$lib/components/Input.svelte';
 	import ScatterPlot from '$lib/components/ScatterPlot.svelte';
+	import ItemDrawer from '$lib/components/ItemDrawer.svelte';
 	import { createClusterColorScale } from '$lib/cluster-colors';
 	import { formatTime, formatPercent } from '$lib/format';
 
@@ -12,6 +13,7 @@
 	let search = $state('');
 	let showCritique = $state(false);
 	let focusClusterId: number | null = $state(null);
+	let inspectItemId: number | null = $state(null);
 
 	const getClusterColor = $derived.by(() =>
 		createClusterColorScale(data.points.map((p) => p.clusterId))
@@ -43,8 +45,8 @@
 		return String(value);
 	}
 
-	function handlePointSelect(_itemId: number) {
-		// Phase 10: item inspector drawer
+	function handlePointSelect(itemId: number) {
+		inspectItemId = itemId;
 	}
 </script>
 
@@ -127,6 +129,10 @@
 			</button>
 		{/if}
 	</div>
+
+	{#if inspectItemId != null}
+		<ItemDrawer itemId={inspectItemId} onClose={() => inspectItemId = null} />
+	{/if}
 
 	{#if showCritique && data.critique}
 		<div class="critique-overlay">

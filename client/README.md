@@ -1,6 +1,14 @@
-# fluster client
+# fluster client v1.0.0
 
 SvelteKit visualization layer for fluster. Read-only access to `project.db`.
+
+## Features
+
+- **Jobs UI** — browse jobs, watch logs update live while running
+- **Cluster Runs UI** — view runs, cluster labels/sizes, critique cards
+- **Canvas Scatter Plot** — interactive UMAP visualization with pan/zoom, search/filter, cluster focus
+- **Item Inspector** — click any point to load full record detail in a side drawer
+- **Project Banner** — shows project name and DB path from environment
 
 ## Environment
 
