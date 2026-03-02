@@ -19,7 +19,7 @@ from fluster.config.plan import Plan
 from fluster.db.schema import ensure_vec_table
 from fluster.jobs.manager import is_cancel_requested, update_progress
 
-_BATCH_SIZE = 64
+_BATCH_SIZE = 8
 
 
 def embed_items(
