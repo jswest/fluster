@@ -21,11 +21,11 @@
 	// --- Canvas refs ---
 	let canvas: HTMLCanvasElement | undefined = $state();
 	let container: HTMLDivElement | undefined = $state();
-	const HEIGHT = 500;
 	const POINT_RADIUS = 3;
 	const HOVER_RADIUS = 4;
 	const HIT_THRESHOLD = 20;
 	const PADDING = 40;
+	const MIN_ZOOM = 0.5;
 
 	// --- Transform state (pan + zoom) ---
 	let panX = $state(0);
@@ -111,23 +111,23 @@
 	const matchCount = $derived(matchSet ? matchSet.size : points.length);
 
 	// --- Coordinate transforms ---
-	function dataToScreen(dataX: number, dataY: number, width: number): [number, number] {
+	function dataToScreen(dataX: number, dataY: number, width: number, height: number): [number, number] {
 		const b = bounds;
 		const plotW = width - PADDING * 2;
-		const plotH = HEIGHT - PADDING * 2;
+		const plotH = height - PADDING * 2;
 		const sx = PADDING + ((dataX - b.minX) / (b.maxX - b.minX)) * plotW;
 		const sy = PADDING + ((dataY - b.minY) / (b.maxY - b.minY)) * plotH;
 		return [(sx * zoom) + panX, (sy * zoom) + panY];
 	}
 
 	// --- Find nearest point ---
-	function findNearest(mx: number, my: number, width: number): Point | null {
+	function findNearest(mx: number, my: number, width: number, height: number): Point | null {
 		let best: Point | null = null;
 		let bestDist = HIT_THRESHOLD * HIT_THRESHOLD;
 		const ms = matchSet;
 		for (const p of points) {
 			if (filterMode === 'hide' && ms && !ms.has(p.itemId)) continue;
-			const [sx, sy] = dataToScreen(p.x, p.y, width);
+			const [sx, sy] = dataToScreen(p.x, p.y, width, height);
 			const dx = sx - mx;
 			const dy = sy - my;
 			const d = dx * dx + dy * dy;
@@ -146,17 +146,20 @@
 		if (!ctx) return;
 
 		const width = container.clientWidth;
+		const height = container.clientHeight;
+		if (width <= 0 || height <= 0) return;
+
 		const dpr = window.devicePixelRatio || 1;
 		canvas.width = width * dpr;
-		canvas.height = HEIGHT * dpr;
+		canvas.height = height * dpr;
 		canvas.style.width = width + 'px';
-		canvas.style.height = HEIGHT + 'px';
+		canvas.style.height = height + 'px';
 		ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
 		// Clear
-		ctx.clearRect(0, 0, width, HEIGHT);
+		ctx.clearRect(0, 0, width, height);
 		ctx.fillStyle = '#FFFFFF';
-		ctx.fillRect(0, 0, width, HEIGHT);
+		ctx.fillRect(0, 0, width, height);
 
 		// Access reactive dependencies
 		const ms = matchSet;
@@ -169,10 +172,10 @@
 
 		// Draw points
 		for (const p of points) {
-			const [sx, sy] = dataToScreen(p.x, p.y, width);
+			const [sx, sy] = dataToScreen(p.x, p.y, width, height);
 
 			// Skip offscreen
-			if (sx < -10 || sx > width + 10 || sy < -10 || sy > HEIGHT + 10) continue;
+			if (sx < -10 || sx > width + 10 || sy < -10 || sy > height + 10) continue;
 
 			const isMatch = !hasSearch || ms!.has(p.itemId);
 			if (!isMatch && filterMode === 'hide') continue;
@@ -224,7 +227,8 @@
 			hoveredPoint = null;
 		} else {
 			const width = container.clientWidth;
-			const nearest = findNearest(mx, my, width);
+			const height = container.clientHeight;
+			const nearest = findNearest(mx, my, width, height);
 			hoveredPoint = nearest;
 			if (nearest) {
 				tooltipX = mx;
@@ -239,7 +243,8 @@
 			const mx = e.clientX - rect.left;
 			const my = e.clientY - rect.top;
 			const width = container.clientWidth;
-			const nearest = findNearest(mx, my, width);
+			const height = container.clientHeight;
+			const nearest = findNearest(mx, my, width, height);
 			if (nearest) {
 				selectedItemId = nearest.itemId;
 				onSelect?.(nearest.itemId);
@@ -258,7 +263,7 @@
 		const my = e.clientY - rect.top;
 
 		const factor = e.deltaY > 0 ? 0.9 : 1.1;
-		const newZoom = Math.max(0.1, Math.min(zoom * factor, 50));
+		const newZoom = Math.max(MIN_ZOOM, Math.min(zoom * factor, 50));
 
 		// Zoom centered on cursor
 		panX = mx - ((mx - panX) / zoom) * newZoom;
@@ -273,7 +278,7 @@
 </script>
 
 <div class="scatter-container">
-	<div class="controls row">
+	<div class="controls">
 		<div class="search-wrap">
 			<Input placeholder="Search points..." bind:value={searchInput} />
 		</div>
@@ -315,19 +320,23 @@
 
 <style>
 	.scatter-container {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
+		width: 100%;
+		height: 100%;
+		position: relative;
 	}
 
 	.controls {
+		position: absolute;
+		top: 0.5rem;
+		right: 0.5rem;
+		display: flex;
 		align-items: center;
 		gap: 0.5rem;
+		z-index: 5;
 	}
 
 	.search-wrap {
-		flex: 1;
-		max-width: 20rem;
+		width: 14rem;
 	}
 
 	.match-count {
@@ -347,8 +356,8 @@
 	}
 
 	.canvas-wrap {
-		position: relative;
-		border: 1px solid var(--color-primary-dark);
+		position: absolute;
+		inset: 0;
 		cursor: grab;
 	}
 

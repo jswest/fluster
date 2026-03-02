@@ -9,6 +9,7 @@
 	let { data } = $props();
 
 	let search = $state('');
+	let showCritique = $state(false);
 
 	const filteredClusters = $derived(
 		data.clusters.filter((c) => {
@@ -41,145 +42,221 @@
 	}
 </script>
 
-<div class="container stack">
-	<div class="header row">
-		<a href="/runs" class="muted">&larr; Runs</a>
-		<h1>Run #{data.run.clusterRunId}</h1>
-	</div>
-
-	<Card>
-		<div class="metadata">
-			<div class="meta-row">
-				<span class="muted">Method</span>
-				<span>{data.run.method}</span>
-			</div>
-			<div class="meta-row">
-				<span class="muted">Parameters</span>
-				<span>{data.run.paramsJson}</span>
-			</div>
-			<div class="meta-row">
-				<span class="muted">Clusters</span>
-				<span>{data.clusters.length}</span>
-			</div>
-			<div class="meta-row">
-				<span class="muted">Created</span>
-				<span>{formatTime(data.run.createdAt)}</span>
-			</div>
-		</div>
-	</Card>
-
-	<h2>Scatter Plot</h2>
-
+<div class="fullscreen">
 	{#if data.points.length === 0}
-		<EmptyState message="No UMAP data available for this run." />
+		<div class="container stack">
+			<EmptyState message="No UMAP data available for this run." />
+		</div>
 	{:else}
 		<ScatterPlot points={data.points} onSelect={handlePointSelect} />
 	{/if}
 
-	<h2>Clusters</h2>
+	<div class="left-rail">
+		<div class="rail-header">
+			<a href="/runs" class="muted">&larr; Runs</a>
+			<h2>Run #{data.run.clusterRunId}</h2>
+		</div>
 
-	{#if data.clusters.length === 0}
-		<EmptyState message="No cluster labels found." />
-	{:else}
-		<Input placeholder="Search clusters by label..." bind:value={search} />
+		<Card>
+			<div class="metadata">
+				<div class="meta-row">
+					<span class="muted">Method</span>
+					<span>{data.run.method}</span>
+				</div>
+				<div class="meta-row">
+					<span class="muted">Params</span>
+					<span>{data.run.paramsJson}</span>
+				</div>
+				<div class="meta-row">
+					<span class="muted">Clusters</span>
+					<span>{data.clusters.length}</span>
+				</div>
+				<div class="meta-row">
+					<span class="muted">Created</span>
+					<span>{formatTime(data.run.createdAt)}</span>
+				</div>
+			</div>
+		</Card>
 
-		{#if filteredClusters.length === 0}
-			<EmptyState message="No clusters match your search." />
+		<h3>Clusters</h3>
+
+		{#if data.clusters.length === 0}
+			<EmptyState message="No cluster labels found." />
 		{:else}
-			<table>
-				<thead>
-					<tr>
-						<th>ID</th>
-						<th>Label</th>
-						<th>Size</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each filteredClusters as cluster}
+			<Input placeholder="Search clusters..." bind:value={search} />
+
+			{#if filteredClusters.length === 0}
+				<p class="muted">No clusters match.</p>
+			{:else}
+				<table>
+					<thead>
 						<tr>
-							<td>{cluster.clusterId}</td>
-							<td>{cluster.label}</td>
-							<td>{cluster.size}</td>
+							<th>ID</th>
+							<th>Label</th>
+							<th>Size</th>
 						</tr>
-					{/each}
-				</tbody>
-			</table>
+					</thead>
+					<tbody>
+						{#each filteredClusters as cluster}
+							<tr>
+								<td>{cluster.clusterId}</td>
+								<td>{cluster.label}</td>
+								<td>{cluster.size}</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			{/if}
 		{/if}
-	{/if}
 
-	<h2>Critique</h2>
+		{#if data.critique}
+			<button class="critique-btn" onclick={() => showCritique = !showCritique}>
+				{showCritique ? 'Hide Critique' : 'Show Critique'}
+			</button>
+		{/if}
+	</div>
 
-	{#if !data.critique}
-		<EmptyState message="No critique available for this run." />
-	{:else}
-		<div class="critique-cards stack">
-			{#if data.critique.verdict}
-				<Card>
-					<h3>Verdict</h3>
-					<p>{data.critique.verdict}</p>
-				</Card>
-			{/if}
+	{#if showCritique && data.critique}
+		<div class="critique-overlay">
+			<div class="critique-header">
+				<h2>Critique</h2>
+				<button onclick={() => showCritique = false}>&times;</button>
+			</div>
 
-			{#if data.critique.quality_score != null}
-				<Card>
-					<h3>Quality Score</h3>
-					<Pill variant={scoreVariant(data.critique.quality_score)}>
-						{formatPercent(data.critique.quality_score)}
-					</Pill>
-				</Card>
-			{/if}
+			<div class="critique-cards stack">
+				{#if data.critique.verdict}
+					<Card>
+						<h3>Verdict</h3>
+						<p>{data.critique.verdict}</p>
+					</Card>
+				{/if}
 
-			{#if data.critique.metrics}
-				<Card>
-					<h3>Metrics</h3>
-					<div class="metadata">
-						{#each Object.entries(data.critique.metrics) as [key, value]}
-							<div class="meta-row">
-								<span class="muted">{formatMetricLabel(key)}</span>
-								<span>{formatMetricValue(value)}</span>
-							</div>
-						{/each}
-					</div>
-				</Card>
-			{/if}
+				{#if data.critique.quality_score != null}
+					<Card>
+						<h3>Quality Score</h3>
+						<Pill variant={scoreVariant(data.critique.quality_score)}>
+							{formatPercent(data.critique.quality_score)}
+						</Pill>
+					</Card>
+				{/if}
 
-			{#if data.critique.recommendations && data.critique.recommendations.length > 0}
-				<Card>
-					<h3>Recommendations</h3>
-					<ul>
-						{#each data.critique.recommendations as rec}
-							<li>{rec}</li>
-						{/each}
-					</ul>
-				</Card>
-			{/if}
+				{#if data.critique.metrics}
+					<Card>
+						<h3>Metrics</h3>
+						<div class="metadata">
+							{#each Object.entries(data.critique.metrics) as [key, value]}
+								<div class="meta-row">
+									<span class="muted">{formatMetricLabel(key)}</span>
+									<span>{formatMetricValue(value)}</span>
+								</div>
+							{/each}
+						</div>
+					</Card>
+				{/if}
+
+				{#if data.critique.recommendations && data.critique.recommendations.length > 0}
+					<Card>
+						<h3>Recommendations</h3>
+						<ul>
+							{#each data.critique.recommendations as rec}
+								<li>{rec}</li>
+							{/each}
+						</ul>
+					</Card>
+				{/if}
+			</div>
 		</div>
 	{/if}
 </div>
 
 <style>
-	.header {
-		align-items: center;
-		gap: 1rem;
+	.fullscreen {
+		height: calc(100vh - 2.75rem);
+		position: relative;
+		overflow: hidden;
 	}
 
-	.header h1 {
+	.left-rail {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 22rem;
+		height: 100%;
+		overflow-y: auto;
+		padding: 1rem;
+		background: rgba(255, 255, 255, 0.85);
+		backdrop-filter: blur(8px);
+		-webkit-backdrop-filter: blur(8px);
+		border-right: 1px solid var(--color-secondary-dark);
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		z-index: 5;
+	}
+
+	.rail-header {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
+	.rail-header h2 {
 		margin: 0;
+		font-size: 1.25rem;
 	}
 
 	.metadata {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+		gap: 0.25rem;
+		font-size: 0.875rem;
 	}
 
 	.meta-row {
 		display: flex;
-		gap: 1rem;
+		gap: 0.75rem;
 	}
 
 	.meta-row .muted {
-		min-width: 10ch;
+		min-width: 7ch;
+	}
+
+	.critique-btn {
+		align-self: flex-start;
+		font-size: 0.8125rem;
+		padding: 0.25rem 0.75rem;
+	}
+
+	.critique-overlay {
+		position: absolute;
+		top: 0;
+		right: 0;
+		width: 28rem;
+		height: 100%;
+		overflow-y: auto;
+		padding: 1rem;
+		z-index: 6;
+		background: rgba(255, 255, 255, 0.9);
+		backdrop-filter: blur(8px);
+		-webkit-backdrop-filter: blur(8px);
+		border-left: 1px solid var(--color-secondary-dark);
+	}
+
+	.critique-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 0.75rem;
+	}
+
+	.critique-header h2 {
+		margin: 0;
+	}
+
+	.critique-header button {
+		font-size: 1.25rem;
+		padding: 0.25rem 0.5rem;
+		line-height: 1;
 	}
 
 	ul {
@@ -189,5 +266,9 @@
 
 	li {
 		margin-bottom: 0.25rem;
+	}
+
+	table {
+		font-size: 0.8125rem;
 	}
 </style>
