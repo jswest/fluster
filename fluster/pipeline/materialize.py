@@ -25,28 +25,50 @@ def _load_caption_model():
 
     import torch
     import transformers
-    from transformers import AutoModelForCausalLM
+    from transformers import AutoModelForCausalLM, PreTrainedModel
 
     logger.info("Loading moondream2 caption model...")
+
+    # Workaround: moondream2's HfMoondream.__init__ doesn't call post_init(),
+    # but transformers >=5.1.0 expects all_tied_weights_keys to exist during
+    # from_pretrained(). Temporarily patch PreTrainedModel.__init__ to set
+    # the missing attribute so from_pretrained() doesn't crash.
+    _orig_init = PreTrainedModel.__init__
+
+    def _patched_init(self, *args, **kwargs):
+        _orig_init(self, *args, **kwargs)
+        if not hasattr(self, "all_tied_weights_keys"):
+            self.all_tied_weights_keys = {}
+
+    PreTrainedModel.__init__ = _patched_init
 
     prev_verbosity = transformers.logging.get_verbosity()
     transformers.logging.set_verbosity_error()
     try:
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", message="`torch_dtype` is deprecated")
+            warnings.filterwarnings("ignore", message=".*unauthenticated.*")
+
+            # moondream2 is incompatible with MPS (NaN, mixed-dtype crashes).
+            # Use CUDA when available, otherwise CPU.
+            if torch.cuda.is_available():
+                device = "cuda"
+                load_kwargs = {"dtype": torch.float16}
+            else:
+                device = "cpu"
+                load_kwargs = {"dtype": torch.float32}
+
             _caption_model = AutoModelForCausalLM.from_pretrained(
                 "vikhyatk/moondream2",
                 revision="2025-06-21",
                 trust_remote_code=True,
-                torch_dtype=torch.float32,
-            )
+                **load_kwargs,
+            ).to(device)
     finally:
+        PreTrainedModel.__init__ = _orig_init
         transformers.logging.set_verbosity(prev_verbosity)
 
-    # Workaround: transformers >=5.1.0 skips post_init() for trust_remote_code models,
-    # causing missing 'all_tied_weights_keys'. Safe to call twice if later fixed upstream.
-    _caption_model.post_init()
-
+    logger.info(f"moondream2 loaded on {_caption_model.device} ({_caption_model.dtype})")
     _caption_model.eval()
     return _caption_model
 
