@@ -21,10 +21,10 @@ Everything is stored locally, and every stage is versioned. You and your data wo
 
 Real-world datasets are often a mixture of:
 
-- Short texts
-- PDFs
-- Random images
-- Metadata columns
+- Texts (up to ~8k tokens)
+- PDFs (not supported yet)
+- Random images (supported)
+- Metadata columns (supported)
 
 `fluster` turns that confusion into structure--reproducibly, and with a complete provenance trail.
 
