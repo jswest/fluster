@@ -2,6 +2,8 @@
 
 import csv
 import hashlib
+
+csv.field_size_limit(10 * 1024 * 1024)  # 10 MB
 import json
 import mimetypes
 import shutil
