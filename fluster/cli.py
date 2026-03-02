@@ -393,6 +393,28 @@ def cancel(
 
 
 @app.command()
+def reset():
+    """Clear pipeline outputs (embeddings, clusters, etc.) so the next run starts fresh."""
+    with _open_project() as (project_path, conn):
+        tables = [
+            "cluster_run_critiques",
+            "cluster_summaries",
+            "cluster_exemplars",
+            "cluster_assignments",
+            "cluster_runs",
+            "reduction_coordinates",
+            "reductions",
+            "vec_embeddings",
+            "embeddings",
+            "representations",
+        ]
+        for table in tables:
+            conn.execute(f"DELETE FROM {table}")
+        conn.commit()
+        typer.echo("Pipeline outputs cleared. Run 'fluster run' to re-process.")
+
+
+@app.command()
 def logs(
     job_id: int | None = typer.Argument(default=None, help="Job ID to show logs for (optional)."),
 ):
