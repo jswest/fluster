@@ -11,7 +11,6 @@ import {
 	artifacts
 } from '$lib/server/db/schema';
 
-const PREVIEW_LENGTH = 200;
 
 function getImageArtifactIds(itemIds: number[]): Map<number, string> {
 	if (itemIds.length === 0) return new Map();
@@ -90,10 +89,7 @@ export function getScatterPlotData(clusterRunId: number) {
 			y: coords[1],
 			clusterId: r.clusterId,
 			recordName: r.recordName ?? '',
-			embeddingTextPreview:
-				r.embeddingText.length > PREVIEW_LENGTH
-					? r.embeddingText.slice(0, PREVIEW_LENGTH) + '…'
-					: r.embeddingText,
+			embeddingText: r.embeddingText,
 			imageArtifactId: imageMap.get(r.itemId) ?? null
 		};
 	});

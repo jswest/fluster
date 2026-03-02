@@ -7,7 +7,7 @@
 		y: number;
 		clusterId: number;
 		recordName: string;
-		embeddingTextPreview: string;
+		embeddingText: string;
 		imageArtifactId: string | null;
 	};
 
@@ -83,7 +83,7 @@
 		const tokens = q.split(/\s+/);
 		const matched = new Set<number>();
 		for (const p of points) {
-			const haystack = (p.recordName + ' ' + p.embeddingTextPreview).toLowerCase();
+			const haystack = (p.recordName + ' ' + p.embeddingText).toLowerCase();
 			if (tokens.every((t) => haystack.includes(t))) {
 				matched.add(p.itemId);
 			}
@@ -319,8 +319,8 @@
 					/>
 				{/if}
 				<div class="tooltip-name">{hoveredPoint.recordName || 'unnamed'}</div>
-				{#if hoveredPoint.embeddingTextPreview}
-					<div class="tooltip-preview">{hoveredPoint.embeddingTextPreview.slice(0, 80)}{hoveredPoint.embeddingTextPreview.length > 80 ? '...' : ''}</div>
+				{#if hoveredPoint.embeddingText}
+					<div class="tooltip-preview">{hoveredPoint.embeddingText.slice(0, 80)}{hoveredPoint.embeddingText.length > 80 ? '...' : ''}</div>
 				{/if}
 				<div class="tooltip-cluster muted">cluster {hoveredPoint.clusterId}</div>
 			</div>
