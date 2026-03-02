@@ -64,6 +64,41 @@ fluster chill
 
 ---
 
+## Workflow
+
+```bash
+# Create a project — this becomes the active project automatically
+fluster init my-project
+
+# Set up your API key (stored in ~/.fluster/secrets.yaml)
+fluster config
+
+# Tweak the plan if you want (embedding model, LLM, clustering params)
+fluster plan
+
+# Ingest a CSV — file_path column is optional
+fluster ingest-rows data.csv
+
+# Run the full pipeline (materialize → embed → reduce → cluster → label → critique)
+fluster run
+
+# Check on jobs and logs
+fluster jobs
+fluster logs
+
+# Export results
+fluster export --cluster-run 1 -o results.csv
+
+# Launch the visualization UI
+fluster chill
+
+# Switch between projects
+fluster list
+fluster use other-project
+```
+
+---
+
 ## Development
 
 `fluster` uses [uv](https://docs.astral.sh/uv/) for package management. No virtualenv dance required.
@@ -86,7 +121,7 @@ uv run pytest -k "cluster" -v
 
 ```
 fluster/
-├── cli.py              # Typer CLI (init, ingest-rows, run, export, jobs, serve)
+├── cli.py              # Typer CLI (init, use, list, config, plan, ingest-rows, run, ...)
 ├── server.py           # FastAPI server (create_app factory)
 ├── config/             # Plan YAML schema, project layout, settings
 ├── db/                 # SQLite connection + schema
