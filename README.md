@@ -55,12 +55,44 @@ Every embedding, reduction, cluster run, label, and critique is stored in the pr
 
 ```bash
 uv tool install -e .
+npm --prefix client install
 
 fluster init my-project
 fluster ingest-rows data.csv
 fluster run
 fluster chill
 ```
+
+---
+
+## Demo
+
+Run an end-to-end demo using the `demo/` folder dataset generator.
+
+```bash
+# from the repo root
+uv sync
+uv tool install -e .
+npm --prefix client install
+
+# create the demo CSV (not committed)
+uv run python demo/fetch_newsgroups.py
+
+# create + select a project
+fluster init demo-20ng
+
+# set provider credentials if needed (OpenAI by default)
+fluster config
+
+# ingest + run full pipeline
+fluster ingest-rows demo/twenty_newsgroups_1k.csv
+fluster run
+
+# open the UI
+fluster chill
+```
+
+Then open `http://localhost:3000`.
 
 ---
 

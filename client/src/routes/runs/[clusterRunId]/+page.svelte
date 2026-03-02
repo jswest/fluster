@@ -51,14 +51,6 @@
 </script>
 
 <div class="fullscreen">
-	{#if data.points.length === 0}
-		<div class="container stack">
-			<EmptyState message="No UMAP data available for this run." />
-		</div>
-	{:else}
-		<ScatterPlot points={data.points} getColor={getClusterColor} {focusClusterId} onSelect={handlePointSelect} />
-	{/if}
-
 	<div class="left-rail">
 		<div class="rail-header">
 			<a href="/runs" class="muted">&larr; Runs</a>
@@ -130,86 +122,95 @@
 		{/if}
 	</div>
 
-	{#if inspectItemId != null}
-		<ItemDrawer itemId={inspectItemId} onClose={() => inspectItemId = null} />
-	{/if}
-
-	{#if showCritique && data.critique}
-		<div class="critique-overlay">
-			<div class="critique-header">
-				<h2>Critique</h2>
-				<button onclick={() => showCritique = false}>&times;</button>
+	<div class="main-area">
+		{#if data.points.length === 0}
+			<div class="container stack">
+				<EmptyState message="No UMAP data available for this run." />
 			</div>
+		{:else}
+			<ScatterPlot points={data.points} getColor={getClusterColor} {focusClusterId} onSelect={handlePointSelect} />
+		{/if}
 
-			<div class="critique-cards stack">
-				{#if data.critique.verdict}
-					<Card>
-						<h3>Verdict</h3>
-						<p>{data.critique.verdict}</p>
-					</Card>
-				{/if}
+		{#if inspectItemId != null}
+			<ItemDrawer itemId={inspectItemId} onClose={() => inspectItemId = null} />
+		{/if}
 
-				{#if data.critique.quality_score != null}
-					<Card>
-						<h3>Quality Score</h3>
-						<Pill variant={scoreVariant(data.critique.quality_score)}>
-							{formatPercent(data.critique.quality_score)}
-						</Pill>
-					</Card>
-				{/if}
+		{#if showCritique && data.critique}
+			<div class="critique-overlay">
+				<div class="critique-header">
+					<h2>Critique</h2>
+					<button onclick={() => showCritique = false}>&times;</button>
+				</div>
 
-				{#if data.critique.metrics}
-					<Card>
-						<h3>Metrics</h3>
-						<div class="metadata">
-							{#each Object.entries(data.critique.metrics) as [key, value]}
-								<div class="meta-row">
-									<span class="muted">{formatMetricLabel(key)}</span>
-									<span>{formatMetricValue(value)}</span>
-								</div>
-							{/each}
-						</div>
-					</Card>
-				{/if}
+				<div class="critique-cards stack">
+					{#if data.critique.verdict}
+						<Card>
+							<h3>Verdict</h3>
+							<p>{data.critique.verdict}</p>
+						</Card>
+					{/if}
 
-				{#if data.critique.recommendations && data.critique.recommendations.length > 0}
-					<Card>
-						<h3>Recommendations</h3>
-						<ul>
-							{#each data.critique.recommendations as rec}
-								<li>{rec}</li>
-							{/each}
-						</ul>
-					</Card>
-				{/if}
+					{#if data.critique.quality_score != null}
+						<Card>
+							<h3>Quality Score</h3>
+							<Pill variant={scoreVariant(data.critique.quality_score)}>
+								{formatPercent(data.critique.quality_score)}
+							</Pill>
+						</Card>
+					{/if}
+
+					{#if data.critique.metrics}
+						<Card>
+							<h3>Metrics</h3>
+							<div class="metadata">
+								{#each Object.entries(data.critique.metrics) as [key, value]}
+									<div class="meta-row">
+										<span class="muted">{formatMetricLabel(key)}</span>
+										<span>{formatMetricValue(value)}</span>
+									</div>
+								{/each}
+							</div>
+						</Card>
+					{/if}
+
+					{#if data.critique.recommendations && data.critique.recommendations.length > 0}
+						<Card>
+							<h3>Recommendations</h3>
+							<ul>
+								{#each data.critique.recommendations as rec}
+									<li>{rec}</li>
+								{/each}
+							</ul>
+						</Card>
+					{/if}
+				</div>
 			</div>
-		</div>
-	{/if}
+		{/if}
+	</div>
 </div>
 
 <style>
 	.fullscreen {
 		height: calc(100vh - 2.75rem);
-		position: relative;
+		display: flex;
 		overflow: hidden;
 	}
 
 	.left-rail {
-		position: absolute;
-		top: 0;
-		left: 0;
 		width: 22rem;
-		height: 100%;
+		flex-shrink: 0;
 		overflow-y: auto;
 		padding: 1rem;
-		background: rgba(255, 255, 255, 0.85);
-		backdrop-filter: blur(8px);
-		-webkit-backdrop-filter: blur(8px);
 		border-right: 1px solid var(--color-secondary-dark);
 		display: flex;
 		flex-direction: column;
 		gap: 0.75rem;
-		z-index: 5;
+	}
+
+	.main-area {
+		flex: 1;
+		position: relative;
+		overflow: hidden;
 	}
 
 	.rail-header {
