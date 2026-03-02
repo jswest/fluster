@@ -2,11 +2,14 @@
 
 import hashlib
 import json
+from unittest.mock import MagicMock
 
 import pytest
+from PIL import Image
 
 from fluster.db.connection import connect
 from fluster.pipeline.ingest import ingest_rows
+from fluster.pipeline import materialize as materialize_mod
 from fluster.pipeline.materialize import materialize_items
 
 
@@ -199,3 +202,135 @@ def test_materialize_preserves_falsy_metadata(project):
 
     rep = conn.execute("SELECT text FROM representations").fetchone()
     assert "score: 0" in rep["text"]
+
+
+# --- Image captioning ---
+
+def _create_test_image(path, width=4, height=4):
+    """Create a minimal valid PNG image for testing."""
+    img = Image.new("RGB", (width, height), color=(255, 0, 0))
+    img.save(path, format="PNG")
+    return path
+
+
+def _mock_caption_model():
+    """Create a mock moondream2 model that returns a fixed caption."""
+    model = MagicMock()
+    model.caption.return_value = {"caption": "A test image of a red square"}
+    return model
+
+
+def test_materialize_image_creates_caption(project, monkeypatch):
+    """An image artifact should be captioned and included in embedding_text."""
+    pdir, conn = project
+
+    img_file = pdir / "photo.png"
+    _create_test_image(img_file)
+
+    mock_model = _mock_caption_model()
+    monkeypatch.setattr(materialize_mod, "_caption_model", mock_model)
+
+    summary = _ingest_and_materialize(
+        pdir, conn, "name,file_path", f"my-photo,{img_file}"
+    )
+
+    assert summary["materialized"] == 1
+
+    rep = conn.execute("SELECT text FROM representations").fetchone()
+    assert "my-photo" in rep["text"]
+    assert "A test image of a red square" in rep["text"]
+    mock_model.caption.assert_called_once()
+
+
+def test_materialize_mixed_text_and_image(project, monkeypatch):
+    """Both text and image items should materialize in the same batch."""
+    pdir, conn = project
+
+    txt_file = pdir / "doc.txt"
+    txt_file.write_text("Some document content")
+
+    img_file = pdir / "photo.jpg"
+    _create_test_image(img_file)
+
+    mock_model = _mock_caption_model()
+    monkeypatch.setattr(materialize_mod, "_caption_model", mock_model)
+
+    summary = _ingest_and_materialize(
+        pdir, conn, "name,file_path",
+        f"doc,{txt_file}",
+        f"photo,{img_file}",
+    )
+
+    assert summary["materialized"] == 2
+
+    reps = conn.execute(
+        "SELECT text FROM representations ORDER BY representation_id"
+    ).fetchall()
+
+    # Text item has extracted text
+    assert "Some document content" in reps[0]["text"]
+    # Image item has caption
+    assert "A test image of a red square" in reps[1]["text"]
+
+
+def test_materialize_image_with_metadata(project, monkeypatch):
+    """Image item should include both metadata and caption in embedding_text."""
+    pdir, conn = project
+
+    img_file = pdir / "sunset.png"
+    _create_test_image(img_file)
+
+    mock_model = _mock_caption_model()
+    monkeypatch.setattr(materialize_mod, "_caption_model", mock_model)
+
+    _ingest_and_materialize(
+        pdir, conn, "name,category,file_path",
+        f"sunset,Nature,{img_file}",
+    )
+
+    rep = conn.execute("SELECT text FROM representations").fetchone()
+    assert "sunset" in rep["text"]
+    assert "category: Nature" in rep["text"]
+    assert "A test image of a red square" in rep["text"]
+
+
+def test_materialize_image_caption_failure_falls_back(project, monkeypatch):
+    """If captioning fails, the item should still materialize from name/metadata."""
+    pdir, conn = project
+
+    img_file = pdir / "broken.png"
+    _create_test_image(img_file)
+
+    mock_model = MagicMock()
+    mock_model.caption.side_effect = RuntimeError("model error")
+    monkeypatch.setattr(materialize_mod, "_caption_model", mock_model)
+
+    summary = _ingest_and_materialize(
+        pdir, conn, "name,category,file_path",
+        f"broken-img,Art,{img_file}",
+    )
+
+    assert summary["materialized"] == 1
+
+    rep = conn.execute("SELECT text FROM representations").fetchone()
+    assert "broken-img" in rep["text"]
+    assert "category: Art" in rep["text"]
+
+
+def test_materialize_image_empty_caption_no_metadata_skipped(project, monkeypatch):
+    """An image with no name, no metadata, and empty caption should be skipped."""
+    pdir, conn = project
+
+    img_file = pdir / "empty.png"
+    _create_test_image(img_file)
+
+    mock_model = MagicMock()
+    mock_model.caption.return_value = {"caption": ""}
+    monkeypatch.setattr(materialize_mod, "_caption_model", mock_model)
+
+    summary = _ingest_and_materialize(
+        pdir, conn, "file_path", f"{img_file}"
+    )
+
+    assert summary["skipped"] == 1
+    assert summary["materialized"] == 0

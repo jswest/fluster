@@ -8,9 +8,51 @@ from pathlib import Path
 from loguru import logger
 from tqdm import tqdm
 
+_caption_model = None
+
+
+def _is_image(mime_type: str | None) -> bool:
+    return mime_type is not None and mime_type.startswith("image/")
+
+
+def _load_caption_model():
+    """Lazy-load moondream2 for image captioning. Cached after first call."""
+    global _caption_model
+    if _caption_model is not None:
+        return _caption_model
+
+    import torch
+    from transformers import AutoModelForCausalLM
+
+    logger.info("Loading moondream2 caption model...")
+    _caption_model = AutoModelForCausalLM.from_pretrained(
+        "vikhyatk/moondream2",
+        trust_remote_code=True,
+        torch_dtype=torch.float32,
+    )
+    _caption_model.eval()
+    return _caption_model
+
+
+def _caption_image(stored_path: str, project_dir: Path, model) -> str:
+    """Generate a text caption for an image using moondream2."""
+    from PIL import Image
+
+    full_path = project_dir / "artifacts" / stored_path
+    try:
+        img = Image.open(full_path).convert("RGB")
+        result = model.caption(img, length="normal")
+        # moondream2 returns a dict with "caption" key or a string
+        if isinstance(result, dict):
+            return result.get("caption", "")
+        return str(result)
+    except Exception as e:
+        logger.warning(f"Failed to caption image {full_path}: {e}")
+        return ""
+
 
 def _extract_text(stored_path: str, project_dir: Path) -> str:
-    """Extract text content from a stored artifact. Text files only for v0."""
+    """Extract text content from a stored artifact. Text files only."""
     full_path = project_dir / "artifacts" / stored_path
     try:
         return full_path.read_text(encoding="utf-8")
@@ -73,16 +115,20 @@ def materialize_items(
 
         # Get all artifacts for this item.
         artifacts = conn.execute(
-            "SELECT a.stored_path FROM item_artifacts ia "
+            "SELECT a.stored_path, a.mime_type FROM item_artifacts ia "
             "JOIN artifacts a ON ia.artifact_id = a.artifact_id "
             "WHERE ia.item_id = ?",
             (item_id,),
         ).fetchall()
 
-        # Extract text from all artifacts.
+        # Extract text (or caption) from all artifacts.
         extracted_parts = []
         for artifact in artifacts:
-            text = _extract_text(artifact["stored_path"], project_dir)
+            if _is_image(artifact["mime_type"]):
+                model = _load_caption_model()
+                text = _caption_image(artifact["stored_path"], project_dir, model)
+            else:
+                text = _extract_text(artifact["stored_path"], project_dir)
             if text.strip():
                 extracted_parts.append(text.strip())
 
