@@ -1,5 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { getRun, getClusterDetails, getCritique } from '$lib/server/queries/runs';
+import { getScatterPlotData } from '$lib/server/queries/items';
 
 export function load({ params }) {
 	const clusterRunId = Number(params.clusterRunId);
@@ -11,6 +12,7 @@ export function load({ params }) {
 	return {
 		run,
 		clusters: getClusterDetails(clusterRunId),
-		critique: getCritique(clusterRunId)
+		critique: getCritique(clusterRunId),
+		points: getScatterPlotData(clusterRunId)
 	};
 }

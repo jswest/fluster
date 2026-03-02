@@ -3,6 +3,7 @@
 	import Pill from '$lib/components/Pill.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import Input from '$lib/components/Input.svelte';
+	import ScatterPlot from '$lib/components/ScatterPlot.svelte';
 	import { formatTime, formatPercent } from '$lib/format';
 
 	let { data } = $props();
@@ -34,6 +35,10 @@
 		}
 		return String(value);
 	}
+
+	function handlePointSelect(_itemId: number) {
+		// Phase 10: item inspector drawer
+	}
 </script>
 
 <div class="container stack">
@@ -62,6 +67,14 @@
 			</div>
 		</div>
 	</Card>
+
+	<h2>Scatter Plot</h2>
+
+	{#if data.points.length === 0}
+		<EmptyState message="No UMAP data available for this run." />
+	{:else}
+		<ScatterPlot points={data.points} onSelect={handlePointSelect} />
+	{/if}
 
 	<h2>Clusters</h2>
 
