@@ -1,5 +1,6 @@
 """Project layout: creation, validation, and path helpers."""
 
+import shutil
 from pathlib import Path
 
 import yaml
@@ -41,6 +42,25 @@ def get_active_project() -> str | None:
         name = settings.ACTIVE_PROJECT_FILE.read_text().strip()
         return name if name else None
     return None
+
+
+def delete_project(project_name: str) -> Path:
+    """Delete a project directory and all its data.
+
+    Returns the deleted path.
+    Raises FileNotFoundError if the project doesn't exist.
+    """
+    if not project_exists(project_name):
+        raise FileNotFoundError(f"Project '{project_name}' does not exist.")
+
+    path = project_dir(project_name)
+    shutil.rmtree(path)
+
+    # Clear active pointer if it was this project.
+    if get_active_project() == project_name:
+        settings.ACTIVE_PROJECT_FILE.unlink(missing_ok=True)
+
+    return path
 
 
 def create_project(project_name: str) -> Path:

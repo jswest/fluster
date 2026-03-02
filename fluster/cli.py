@@ -16,6 +16,7 @@ from fluster.config import settings
 from fluster.config.plan import load_plan, save_plan, Plan, LLMProvider
 from fluster.config.project import (
     create_project,
+    delete_project,
     get_active_project,
     list_projects,
     project_dir,
@@ -126,6 +127,17 @@ def list_cmd():
     for name in projects:
         marker = " *" if name == active else ""
         console.print(f"  {name}{marker}")
+
+
+@app.command()
+def delete(project_name: str = typer.Argument(help="Project to delete.")):
+    """Permanently delete a project and all its data."""
+    if not project_exists(project_name):
+        logger.error(f"Project '{project_name}' does not exist.")
+        raise typer.Exit(code=1)
+    typer.confirm(f"Delete project '{project_name}'? This cannot be undone", abort=True)
+    delete_project(project_name)
+    logger.info(f"Deleted project '{project_name}'")
 
 
 @app.command()

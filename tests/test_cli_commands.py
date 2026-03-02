@@ -7,7 +7,7 @@ from typer.testing import CliRunner
 
 from fluster.cli import app
 from fluster.config import settings
-from fluster.config.project import project_dir, set_active_project
+from fluster.config.project import create_project, project_dir, project_exists, set_active_project
 from fluster.db.connection import connect
 from fluster.jobs.manager import create_job, get_job, start_job, succeed_job
 from fluster.pipeline.run import PipelineCancelled
@@ -125,3 +125,23 @@ def test_cancel_finished_job(named_project):
     row = get_job(conn, job_id)
     conn.close()
     assert row["cancel_requested_at"] is None  # Should NOT be set on finished job.
+
+
+# --- fluster delete ---
+
+
+def test_delete_happy_path(named_project):
+    result = runner.invoke(app, ["delete", "test-proj"], input="y\n")
+    assert result.exit_code == 0
+    assert not project_exists("test-proj")
+
+
+def test_delete_nonexistent_project(named_project):
+    result = runner.invoke(app, ["delete", "ghost"])
+    assert result.exit_code == 1
+
+
+def test_delete_aborted(named_project):
+    result = runner.invoke(app, ["delete", "test-proj"], input="n\n")
+    assert result.exit_code == 1  # typer.confirm(abort=True) exits with 1
+    assert project_exists("test-proj")

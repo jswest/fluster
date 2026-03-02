@@ -4,8 +4,11 @@ from pathlib import Path
 
 from fluster.config.project import (
     create_project,
+    delete_project,
+    get_active_project,
     list_projects,
     project_exists,
+    set_active_project,
 )
 from fluster.config.plan import Plan, load_plan
 from fluster.config import settings
@@ -20,6 +23,7 @@ def tmp_fluster_home(tmp_path, monkeypatch):
     home = tmp_path / ".fluster"
     monkeypatch.setattr(settings, "FLUSTER_HOME", home)
     monkeypatch.setattr(settings, "PROJECTS_DIR", home / "projects")
+    monkeypatch.setattr(settings, "ACTIVE_PROJECT_FILE", home / "active_project")
     return home
 
 
@@ -59,3 +63,31 @@ def test_list_projects(tmp_fluster_home):
     create_project("alpha")
     create_project("beta")
     assert list_projects() == ["alpha", "beta"]
+
+
+# --- Delete ---
+
+
+def test_delete_project_removes_directory(tmp_fluster_home):
+    pdir = create_project("doomed")
+    assert pdir.exists()
+
+    delete_project("doomed")
+
+    assert not pdir.exists()
+    assert not project_exists("doomed")
+
+
+def test_delete_project_clears_active(tmp_fluster_home):
+    create_project("doomed")
+    set_active_project("doomed")
+    assert get_active_project() == "doomed"
+
+    delete_project("doomed")
+
+    assert get_active_project() is None
+
+
+def test_delete_nonexistent_raises(tmp_fluster_home):
+    with pytest.raises(FileNotFoundError):
+        delete_project("ghost")
