@@ -135,6 +135,38 @@ fluster use other-project
 
 ---
 
+## CSV Format
+
+Your CSV needs at least one column of text content. Two column names are special:
+
+| Column | Required? | What it does |
+|--------|-----------|--------------|
+| `name` | No | A human-readable label for the row (shown in the UI) |
+| `file_path` | No | Absolute path to a file to attach as an artifact |
+
+Everything else becomes searchable metadata.
+
+### Images
+
+If `file_path` points to an image (`.jpg`, `.png`, etc.), fluster will:
+
+1. **Caption it** locally with [moondream2](https://huggingface.co/vikhyatk/moondream2) — the caption becomes the row's searchable text
+2. **Embed it** with [nomic-embed-vision-v1.5](https://huggingface.co/nomic-ai/nomic-embed-vision-v1.5) — same 768D space as text, so images and text cluster together naturally
+3. **Display it** in the UI — thumbnails on hover, full preview in the detail drawer
+
+No external services needed. Both models run locally via `transformers`.
+
+Example:
+
+```csv
+name,file_path,source
+cat lounging,/data/photos/cat.jpg,flickr
+meeting notes,/data/docs/notes.txt,internal
+dog at park,/data/photos/dog.png,flickr
+```
+
+---
+
 ## Development
 
 `fluster` uses [uv](https://docs.astral.sh/uv/) for package management. No virtualenv dance required.
