@@ -1,4 +1,4 @@
-import { eq, and } from 'drizzle-orm';
+import { eq, and, like, inArray } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import {
 	items,
@@ -6,10 +6,37 @@ import {
 	representations,
 	reductionCoordinates,
 	clusterAssignments,
-	clusterRuns
+	clusterRuns,
+	itemArtifacts,
+	artifacts
 } from '$lib/server/db/schema';
 
 const PREVIEW_LENGTH = 200;
+
+function getImageArtifactIds(itemIds: number[]): Map<number, string> {
+	if (itemIds.length === 0) return new Map();
+
+	const results = db
+		.select({
+			itemId: itemArtifacts.itemId,
+			artifactId: itemArtifacts.artifactId
+		})
+		.from(itemArtifacts)
+		.innerJoin(artifacts, eq(itemArtifacts.artifactId, artifacts.artifactId))
+		.where(and(
+			like(artifacts.mimeType, 'image/%'),
+			inArray(itemArtifacts.itemId, itemIds)
+		))
+		.all();
+
+	const map = new Map<number, string>();
+	for (const r of results) {
+		if (!map.has(r.itemId)) {
+			map.set(r.itemId, r.artifactId);
+		}
+	}
+	return map;
+}
 
 export function getScatterPlotData(clusterRunId: number) {
 	const run = db
@@ -53,6 +80,8 @@ export function getScatterPlotData(clusterRunId: number) {
 		)
 		.all();
 
+	const imageMap = getImageArtifactIds(rawRows.map((r) => r.itemId));
+
 	return rawRows.map((r) => {
 		const coords = JSON.parse(r.coordinatesJson) as number[];
 		return {
@@ -64,7 +93,8 @@ export function getScatterPlotData(clusterRunId: number) {
 			embeddingTextPreview:
 				r.embeddingText.length > PREVIEW_LENGTH
 					? r.embeddingText.slice(0, PREVIEW_LENGTH) + '…'
-					: r.embeddingText
+					: r.embeddingText,
+			imageArtifactId: imageMap.get(r.itemId) ?? null
 		};
 	});
 }
@@ -96,10 +126,24 @@ export function getItemDetail(itemId: number) {
 		metadata = JSON.parse(row.rowMetadataJson);
 	} catch {}
 
+	const imageRow = db
+		.select({ artifactId: itemArtifacts.artifactId })
+		.from(itemArtifacts)
+		.innerJoin(artifacts, eq(itemArtifacts.artifactId, artifacts.artifactId))
+		.where(
+			and(
+				eq(itemArtifacts.itemId, itemId),
+				like(artifacts.mimeType, 'image/%')
+			)
+		)
+		.limit(1)
+		.get();
+
 	return {
 		itemId: row.itemId,
 		recordName: row.rowName ?? '',
 		metadata,
-		embeddingText: row.embeddingText
+		embeddingText: row.embeddingText,
+		imageArtifactId: imageRow?.artifactId ?? null
 	};
 }

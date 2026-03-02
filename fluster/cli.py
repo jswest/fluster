@@ -470,6 +470,7 @@ def chill(
         **os.environ,
         "FLUSTER_DB_PATH": str(db_path),
         "FLUSTER_PROJECT_NAME": project_name,
+        "FLUSTER_PROJECT_DIR": str(project_dir(project_name)),
         "PORT": str(port),
         "HOST": host,
     }

@@ -13,3 +13,4 @@ if (!building) {
 
 export const dbPath: string = env.FLUSTER_DB_PATH ?? '';
 export const projectName: string = env.FLUSTER_PROJECT_NAME ?? '';
+export const projectDir: string = env.FLUSTER_PROJECT_DIR ?? '';
