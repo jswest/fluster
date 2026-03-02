@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { scaleOrdinal } from 'd3-scale';
 	import Input from './Input.svelte';
 
 	type Point = {
@@ -13,10 +12,12 @@
 
 	interface Props {
 		points: Point[];
+		getColor: (clusterId: number) => string;
+		focusClusterId?: number | null;
 		onSelect?: (itemId: number) => void;
 	}
 
-	let { points, onSelect }: Props = $props();
+	let { points, getColor, focusClusterId = null, onSelect }: Props = $props();
 
 	// --- Canvas refs ---
 	let canvas: HTMLCanvasElement | undefined = $state();
@@ -59,25 +60,6 @@
 		return () => clearTimeout(debounceTimer);
 	});
 
-	// --- Color scale ---
-	const PALETTE = [
-		'#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f',
-		'#edc948', '#b07aa1', '#ff9da7', '#9c755f', '#bab0ac'
-	];
-	const NOISE_COLOR = '#999999';
-
-	const colorScale = $derived.by(() => {
-		const ids = [...new Set(points.map((p) => p.clusterId))]
-			.filter((id) => id >= 0)
-			.sort((a, b) => a - b);
-		return scaleOrdinal<number, string>().domain(ids).range(PALETTE);
-	});
-
-	function getColor(clusterId: number): string {
-		if (clusterId < 0) return NOISE_COLOR;
-		return colorScale(clusterId);
-	}
-
 	// --- Data bounds ---
 	const bounds = $derived.by(() => {
 		if (points.length === 0) return { minX: 0, maxX: 1, minY: 0, maxY: 1 };
@@ -110,6 +92,20 @@
 
 	const matchCount = $derived(matchSet ? matchSet.size : points.length);
 
+	// --- Visibility check: combines search filter + cluster focus ---
+	function isPointVisible(
+		p: Point,
+		ms: Set<number> | null,
+		fcId: number | null,
+		fm: 'fade' | 'hide'
+	): 'full' | 'faded' | 'hidden' {
+		const searchMatch = !ms || ms.has(p.itemId);
+		const clusterMatch = fcId == null || p.clusterId === fcId;
+		const visible = searchMatch && clusterMatch;
+		if (visible) return 'full';
+		return fm === 'hide' ? 'hidden' : 'faded';
+	}
+
 	// --- Coordinate transforms ---
 	function dataToScreen(dataX: number, dataY: number, width: number, height: number): [number, number] {
 		const b = bounds;
@@ -124,9 +120,8 @@
 	function findNearest(mx: number, my: number, width: number, height: number): Point | null {
 		let best: Point | null = null;
 		let bestDist = HIT_THRESHOLD * HIT_THRESHOLD;
-		const ms = matchSet;
 		for (const p of points) {
-			if (filterMode === 'hide' && ms && !ms.has(p.itemId)) continue;
+			if (isPointVisible(p, matchSet, focusClusterId, filterMode) === 'hidden') continue;
 			const [sx, sy] = dataToScreen(p.x, p.y, width, height);
 			const dx = sx - mx;
 			const dy = sy - my;
@@ -161,29 +156,30 @@
 		ctx.fillStyle = '#FFFFFF';
 		ctx.fillRect(0, 0, width, height);
 
-		// Access reactive dependencies
-		const ms = matchSet;
-		const hasSearch = ms !== null;
+		// Access reactive dependencies so the effect re-runs on state changes
 		const _zoom = zoom;
 		const _panX = panX;
 		const _panY = panY;
 		const _selectedItemId = selectedItemId;
 		const _hoveredPoint = hoveredPoint;
+		const _matchSet = matchSet;
+		const _focusClusterId = focusClusterId;
+		const _filterMode = filterMode;
 
 		// Draw points
 		for (const p of points) {
+			const vis = isPointVisible(p, _matchSet, _focusClusterId, _filterMode);
+			if (vis === 'hidden') continue;
+
 			const [sx, sy] = dataToScreen(p.x, p.y, width, height);
 
 			// Skip offscreen
 			if (sx < -10 || sx > width + 10 || sy < -10 || sy > height + 10) continue;
 
-			const isMatch = !hasSearch || ms!.has(p.itemId);
-			if (!isMatch && filterMode === 'hide') continue;
-
 			const isHovered = _hoveredPoint?.itemId === p.itemId;
 			const isSelected = _selectedItemId === p.itemId;
 
-			ctx.globalAlpha = (!isMatch && hasSearch) ? 0.1 : 1;
+			ctx.globalAlpha = vis === 'faded' ? 0.1 : 1;
 			ctx.fillStyle = getColor(p.clusterId);
 			ctx.beginPath();
 			ctx.arc(sx, sy, isHovered ? HOVER_RADIUS : POINT_RADIUS, 0, Math.PI * 2);

@@ -4,12 +4,18 @@
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import Input from '$lib/components/Input.svelte';
 	import ScatterPlot from '$lib/components/ScatterPlot.svelte';
+	import { createClusterColorScale } from '$lib/cluster-colors';
 	import { formatTime, formatPercent } from '$lib/format';
 
 	let { data } = $props();
 
 	let search = $state('');
 	let showCritique = $state(false);
+	let focusClusterId: number | null = $state(null);
+
+	const getClusterColor = $derived.by(() =>
+		createClusterColorScale(data.points.map((p) => p.clusterId))
+	);
 
 	const filteredClusters = $derived(
 		data.clusters.filter((c) => {
@@ -48,7 +54,7 @@
 			<EmptyState message="No UMAP data available for this run." />
 		</div>
 	{:else}
-		<ScatterPlot points={data.points} onSelect={handlePointSelect} />
+		<ScatterPlot points={data.points} getColor={getClusterColor} {focusClusterId} onSelect={handlePointSelect} />
 	{/if}
 
 	<div class="left-rail">
@@ -91,6 +97,7 @@
 				<table>
 					<thead>
 						<tr>
+							<th></th>
 							<th>ID</th>
 							<th>Label</th>
 							<th>Size</th>
@@ -98,7 +105,12 @@
 					</thead>
 					<tbody>
 						{#each filteredClusters as cluster}
-							<tr>
+							<tr
+								class="cluster-row"
+								class:active={focusClusterId === cluster.clusterId}
+								onclick={() => focusClusterId = focusClusterId === cluster.clusterId ? null : cluster.clusterId}
+							>
+								<td><span class="swatch" style="background: {getClusterColor(cluster.clusterId)}"></span></td>
 								<td>{cluster.clusterId}</td>
 								<td>{cluster.label}</td>
 								<td>{cluster.size}</td>
@@ -270,5 +282,25 @@
 
 	table {
 		font-size: 0.8125rem;
+	}
+
+	.cluster-row {
+		cursor: pointer;
+	}
+
+	.cluster-row:hover {
+		background: rgba(0, 0, 0, 0.04);
+	}
+
+	.cluster-row.active {
+		background: rgba(0, 0, 0, 0.08);
+	}
+
+	.swatch {
+		display: inline-block;
+		width: 0.75rem;
+		height: 0.75rem;
+		border-radius: 2px;
+		vertical-align: middle;
 	}
 </style>
