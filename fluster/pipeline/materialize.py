@@ -149,6 +149,8 @@ def materialize_items(
 
     materialized = 0
     skipped = 0
+    batch_size = 50
+    uncommitted = 0
 
     for item in tqdm(items, desc="Materializing", unit="item", disable=len(items) == 0):
         item_id = item["item_id"]
@@ -168,8 +170,8 @@ def materialize_items(
         for artifact in artifacts:
             if _is_image(artifact["mime_type"]):
                 if caption_images:
-                    model, processor, device = _load_caption_model()
-                    text = _caption_image(artifact["stored_path"], project_dir, model, processor, device)
+                    model, tokenizer, device = _load_caption_model()
+                    text = _caption_image(artifact["stored_path"], project_dir, model, tokenizer, device)
                 else:
                     text = ""
             else:
@@ -196,8 +198,14 @@ def materialize_items(
             (item_id, embedding_text, _text_hash(embedding_text)),
         )
         materialized += 1
+        uncommitted += 1
 
-    conn.commit()
+        if uncommitted >= batch_size:
+            conn.commit()
+            uncommitted = 0
+
+    if uncommitted:
+        conn.commit()
 
     return {
         "materialized": materialized,
