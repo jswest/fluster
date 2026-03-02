@@ -1,4 +1,4 @@
-"""Tests for CLI commands: run, jobs, job, cancel (Phase 16)."""
+"""Tests for CLI commands: run, jobs, job, cancel."""
 
 from unittest.mock import patch
 
@@ -7,7 +7,7 @@ from typer.testing import CliRunner
 
 from fluster.cli import app
 from fluster.config import settings
-from fluster.config.project import project_dir
+from fluster.config.project import project_dir, set_active_project
 from fluster.db.connection import connect
 from fluster.jobs.manager import create_job, get_job, start_job, succeed_job
 from fluster.pipeline.run import PipelineCancelled
@@ -20,7 +20,7 @@ runner = CliRunner()
 
 @patch("fluster.cli.run_pipeline", return_value={"completed_steps": 7, "total_steps": 7})
 def test_run_happy_path(mock_pipeline, named_project):
-    result = runner.invoke(app, ["run", "test-proj"])
+    result = runner.invoke(app, ["run"])
     assert result.exit_code == 0
     mock_pipeline.assert_called_once()
 
@@ -29,13 +29,15 @@ def test_run_project_not_found(tmp_path, monkeypatch):
     home = tmp_path / ".fluster"
     monkeypatch.setattr(settings, "FLUSTER_HOME", home)
     monkeypatch.setattr(settings, "PROJECTS_DIR", home / "projects")
-    result = runner.invoke(app, ["run", "nope"])
+    monkeypatch.setattr(settings, "ACTIVE_PROJECT_FILE", home / "active_project")
+    set_active_project("nope")
+    result = runner.invoke(app, ["run"])
     assert result.exit_code == 1
 
 
 @patch("fluster.cli.run_pipeline", side_effect=RuntimeError("boom"))
 def test_run_failure_marks_job_failed(mock_pipeline, named_project):
-    result = runner.invoke(app, ["run", "test-proj"])
+    result = runner.invoke(app, ["run"])
     assert result.exit_code == 1
 
     conn = connect(project_dir(named_project))
@@ -47,7 +49,7 @@ def test_run_failure_marks_job_failed(mock_pipeline, named_project):
 
 @patch("fluster.cli.run_pipeline", side_effect=PipelineCancelled(1))
 def test_run_cancellation(mock_pipeline, named_project):
-    result = runner.invoke(app, ["run", "test-proj"])
+    result = runner.invoke(app, ["run"])
     assert result.exit_code == 1
 
 
@@ -55,7 +57,7 @@ def test_run_cancellation(mock_pipeline, named_project):
 
 
 def test_jobs_empty(named_project):
-    result = runner.invoke(app, ["jobs", "test-proj"])
+    result = runner.invoke(app, ["jobs"])
     assert result.exit_code == 0
     assert "No jobs" in result.output
 
@@ -66,9 +68,7 @@ def test_jobs_lists_entries(named_project):
     create_job(conn, "full_run")
     conn.close()
 
-    # Need to create a fresh connection since the first was closed,
-    # but the jobs are already in the DB. Just invoke the CLI.
-    result = runner.invoke(app, ["jobs", "test-proj"])
+    result = runner.invoke(app, ["jobs"])
     assert result.exit_code == 0
     assert "full_run" in result.output
 
@@ -82,14 +82,14 @@ def test_job_shows_details(named_project):
     start_job(conn, job_id)
     conn.close()
 
-    result = runner.invoke(app, ["job", "test-proj", str(job_id)])
+    result = runner.invoke(app, ["job", str(job_id)])
     assert result.exit_code == 0
     assert "full_run" in result.output
     assert "running" in result.output
 
 
 def test_job_not_found(named_project):
-    result = runner.invoke(app, ["job", "test-proj", "9999"])
+    result = runner.invoke(app, ["job", "9999"])
     assert result.exit_code == 1
 
 
@@ -102,7 +102,7 @@ def test_cancel_running_job(named_project):
     start_job(conn, job_id)
     conn.close()
 
-    result = runner.invoke(app, ["cancel", "test-proj", str(job_id)])
+    result = runner.invoke(app, ["cancel", str(job_id)])
     assert result.exit_code == 0
 
     conn = connect(project_dir(named_project))
@@ -118,7 +118,7 @@ def test_cancel_finished_job(named_project):
     succeed_job(conn, job_id)
     conn.close()
 
-    result = runner.invoke(app, ["cancel", "test-proj", str(job_id)])
+    result = runner.invoke(app, ["cancel", str(job_id)])
     assert result.exit_code == 0
     # Warning goes to stderr via loguru, not stdout. Just verify no error exit.
     conn = connect(project_dir(named_project))

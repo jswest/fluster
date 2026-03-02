@@ -197,7 +197,7 @@ def test_cli_export_stdout(named_project):
     run_id = _seed_cluster_run(conn, n_items=3)
     conn.close()
 
-    result = runner.invoke(app, ["export", "test-proj", "--cluster-run", str(run_id)])
+    result = runner.invoke(app, ["export", "--cluster-run", str(run_id)])
     assert result.exit_code == 0
     assert "row_id" in result.output
     assert "row_0" in result.output
@@ -210,7 +210,7 @@ def test_cli_export_to_file(named_project, tmp_path):
 
     out_file = tmp_path / "export.csv"
     result = runner.invoke(
-        app, ["export", "test-proj", "--cluster-run", str(run_id), "--output", str(out_file)]
+        app, ["export", "--cluster-run", str(run_id), "--output", str(out_file)]
     )
     assert result.exit_code == 0
     assert out_file.exists()
@@ -219,14 +219,17 @@ def test_cli_export_to_file(named_project, tmp_path):
 
 
 def test_cli_export_nonexistent_run(named_project):
-    result = runner.invoke(app, ["export", "test-proj", "--cluster-run", "9999"])
+    result = runner.invoke(app, ["export", "--cluster-run", "9999"])
     assert result.exit_code == 1
 
 
 def test_cli_export_nonexistent_project(tmp_path, monkeypatch):
     from fluster.config import settings
+    from fluster.config.project import set_active_project
     home = tmp_path / ".fluster"
     monkeypatch.setattr(settings, "FLUSTER_HOME", home)
     monkeypatch.setattr(settings, "PROJECTS_DIR", home / "projects")
-    result = runner.invoke(app, ["export", "nope", "--cluster-run", "1"])
+    monkeypatch.setattr(settings, "ACTIVE_PROJECT_FILE", home / "active_project")
+    set_active_project("nope")
+    result = runner.invoke(app, ["export", "--cluster-run", "1"])
     assert result.exit_code == 1

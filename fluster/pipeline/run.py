@@ -40,6 +40,7 @@ def run_pipeline(
     project_path: Path,
     plan: Plan,
     job_id: int,
+    on_step=None,
 ) -> dict:
     """Execute the full pipeline: materialize → embed → reduce → cluster → exemplars → label → critique.
 
@@ -57,6 +58,8 @@ def run_pipeline(
             "completed_steps": completed,
             "total_steps": total_steps,
         })
+        if on_step:
+            on_step(name, completed, total_steps)
 
     # Step 1: materialize
     log_job(conn, job_id, "Starting materialize_items")

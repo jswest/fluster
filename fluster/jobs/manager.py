@@ -113,6 +113,14 @@ def get_job_logs(conn: sqlite3.Connection, job_id: int) -> list[sqlite3.Row]:
     ).fetchall()
 
 
+def get_recent_logs(conn: sqlite3.Connection, limit: int = 50) -> list[sqlite3.Row]:
+    """Fetch recent log entries across all jobs."""
+    return conn.execute(
+        "SELECT * FROM job_logs ORDER BY created_at DESC LIMIT ?",
+        (limit,),
+    ).fetchall()
+
+
 def list_jobs(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     """Return the 20 most recent jobs, newest first."""
     return conn.execute(

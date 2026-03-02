@@ -1,6 +1,7 @@
 """generate_json — unified LLM interface with structured output and audit trail."""
 
 import json
+import os
 import sqlite3
 from typing import TypeVar
 
@@ -13,11 +14,28 @@ T = TypeVar("T", bound=BaseModel)
 _MAX_RETRIES = 3
 
 
+def _load_openai_key() -> str | None:
+    """Load OpenAI API key from secrets.yaml if not set in environment."""
+    if os.environ.get("OPENAI_API_KEY"):
+        return None  # env var takes precedence, let openai lib find it
+    try:
+        import yaml
+        from fluster.config.settings import SECRETS_FILE
+
+        if SECRETS_FILE.is_file():
+            secrets = yaml.safe_load(SECRETS_FILE.read_text()) or {}
+            return secrets.get("openai_api_key")
+    except Exception:
+        return None
+    return None
+
+
 def _call_openai(prompt: str, config: LLMConfig) -> str:
     """Call the OpenAI-compatible API and return raw text."""
     import openai
 
-    client = openai.OpenAI()
+    api_key = _load_openai_key()
+    client = openai.OpenAI(api_key=api_key)
     response = client.chat.completions.create(
         model=config.model,
         messages=[{"role": "user", "content": prompt}],

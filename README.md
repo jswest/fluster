@@ -57,9 +57,9 @@ Every embedding, reduction, cluster run, label, and critique is stored in the pr
 uv tool install -e .
 
 fluster init my-project
-fluster ingest-rows my-project data.csv
-fluster run my-project
-fluster chill my-project
+fluster ingest-rows data.csv
+fluster run
+fluster chill
 ```
 
 ---
@@ -99,7 +99,7 @@ fluster/
 ### Starting the dev server
 
 ```bash
-fluster serve my-project --port 8000
+fluster serve --port 8000
 ```
 
 ### Database

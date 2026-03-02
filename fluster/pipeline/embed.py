@@ -1,6 +1,15 @@
 """embed_items — batch-embed representations using sentence-transformers."""
 
+import logging
+import os
 import sqlite3
+import warnings
+
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+warnings.filterwarnings("ignore", message=".*unauthenticated.*")
+logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
+logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
 
 from sentence_transformers import SentenceTransformer
 

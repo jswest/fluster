@@ -29,6 +29,20 @@ def list_projects() -> list[str]:
     )
 
 
+def set_active_project(project_name: str) -> None:
+    """Write the active project name to disk."""
+    settings.FLUSTER_HOME.mkdir(parents=True, exist_ok=True)
+    settings.ACTIVE_PROJECT_FILE.write_text(project_name)
+
+
+def get_active_project() -> str | None:
+    """Read the active project name, or None if not set."""
+    if settings.ACTIVE_PROJECT_FILE.is_file():
+        name = settings.ACTIVE_PROJECT_FILE.read_text().strip()
+        return name if name else None
+    return None
+
+
 def create_project(project_name: str) -> Path:
     """Create a new project directory with default files.
 

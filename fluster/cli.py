@@ -13,8 +13,15 @@ from rich.table import Table
 
 from fluster import __version__
 from fluster.config import settings
-from fluster.config.plan import load_plan
-from fluster.config.project import create_project, project_dir, project_exists
+from fluster.config.plan import load_plan, save_plan, Plan, LLMProvider
+from fluster.config.project import (
+    create_project,
+    get_active_project,
+    list_projects,
+    project_dir,
+    project_exists,
+    set_active_project,
+)
 from fluster.db.connection import connect
 from fluster.jobs.manager import (
     create_job,
@@ -22,7 +29,9 @@ from fluster.jobs.manager import (
     get_active_job,
     get_job,
     get_job_logs,
+    get_recent_logs,
     list_jobs,
+    mark_canceled,
     request_cancel,
     start_job,
     succeed_job,
@@ -34,12 +43,22 @@ from fluster.pipeline.run import PipelineCancelled, run_pipeline
 console = Console()
 
 
+def _resolve_project() -> str:
+    """Return the active project name or exit with a helpful error."""
+    name = get_active_project()
+    if not name:
+        logger.error("No active project. Run 'fluster use <name>' first.")
+        raise typer.Exit(code=1)
+    return name
+
+
 @contextmanager
-def _open_project(project_name: str):
-    """Validate a project exists, then yield (project_path, connection).
+def _open_project():
+    """Resolve the active project, validate it exists, yield (project_path, connection).
 
     Closes the connection on exit.
     """
+    project_name = _resolve_project()
     if not project_exists(project_name):
         logger.error(f"Project '{project_name}' does not exist.")
         raise typer.Exit(code=1)
@@ -82,16 +101,109 @@ def init(project_name: str = typer.Argument(help="Name for the new project.")):
     except FileExistsError:
         logger.error(f"Project '{project_name}' already exists.")
         raise typer.Exit(code=1)
-    logger.info(f"Created project '{project_name}' at {project_path}")
+    set_active_project(project_name)
+    logger.info(f"Created and now using project '{project_name}' at {project_path}")
+
+
+@app.command()
+def use(project_name: str = typer.Argument(help="Project to switch to.")):
+    """Set the active project."""
+    if not project_exists(project_name):
+        logger.error(f"Project '{project_name}' does not exist.")
+        raise typer.Exit(code=1)
+    set_active_project(project_name)
+    logger.info(f"Now using project '{project_name}'")
+
+
+@app.command(name="list")
+def list_cmd():
+    """List all projects."""
+    projects = list_projects()
+    if not projects:
+        console.print("[dim]No projects found.[/dim]")
+        return
+    active = get_active_project()
+    for name in projects:
+        marker = " *" if name == active else ""
+        console.print(f"  {name}{marker}")
+
+
+@app.command()
+def config():
+    """Set up API keys for LLM providers."""
+    import yaml
+
+    secrets = {}
+    if settings.SECRETS_FILE.is_file():
+        secrets = yaml.safe_load(settings.SECRETS_FILE.read_text()) or {}
+
+    provider = typer.prompt(
+        "LLM provider", default="openai", type=str,
+    ).strip().lower()
+
+    if provider == "openai":
+        current = secrets.get("openai_api_key", "")
+        hint = f" (current: ...{current[-4:]})" if current else ""
+        key = typer.prompt(
+            f"OpenAI API key{hint}", hide_input=True,
+        ).strip()
+        secrets["openai_api_key"] = key
+    elif provider == "ollama":
+        console.print("Ollama runs locally — no API key needed.")
+        return
+    else:
+        console.print(f"Unknown provider '{provider}'. No key saved.")
+        return
+
+    settings.FLUSTER_HOME.mkdir(parents=True, exist_ok=True)
+    settings.SECRETS_FILE.write_text(
+        yaml.dump(secrets, default_flow_style=False)
+    )
+    console.print(f"Saved to {settings.SECRETS_FILE}")
+
+
+@app.command(name="plan")
+def plan_cmd():
+    """Interactively edit the clustering plan for the active project."""
+    with _open_project() as (project_path, _conn):
+        plan_path = project_path / settings.PLAN_YAML
+        plan = load_plan(plan_path)
+
+        plan.embedding.model_name = typer.prompt(
+            "Embedding model", default=plan.embedding.model_name,
+        )
+        plan.embedding.max_tokens = typer.prompt(
+            "Embedding max tokens", default=plan.embedding.max_tokens, type=int,
+        )
+
+        provider_str = typer.prompt(
+            "LLM provider (openai/ollama)", default=plan.llm.provider.value,
+        ).strip().lower()
+        plan.llm.provider = LLMProvider(provider_str)
+
+        plan.llm.model = typer.prompt(
+            "LLM model", default=plan.llm.model,
+        )
+
+        min_cluster = plan.clustering[0].params.get("min_cluster_size", 5)
+        min_cluster = typer.prompt(
+            "HDBSCAN min_cluster_size", default=min_cluster, type=int,
+        )
+        plan.clustering[0].params["min_cluster_size"] = min_cluster
+
+        save_plan(plan, plan_path)
+        console.print(f"\nPlan saved to {plan_path}")
+        console.print(f"  Embedding:  {plan.embedding.model_name} (max {plan.embedding.max_tokens} tokens)")
+        console.print(f"  LLM:        {plan.llm.provider.value} / {plan.llm.model}")
+        console.print(f"  Clustering:  min_cluster_size={min_cluster}")
 
 
 @app.command(name="ingest-rows")
 def ingest_rows_cmd(
-    project_name: str = typer.Argument(help="Project to ingest into."),
     csv_path: Path = typer.Argument(help="Path to the CSV file.", exists=True),
 ):
-    """Ingest rows from a CSV file into a project."""
-    with _open_project(project_name) as (project_path, conn):
+    """Ingest rows from a CSV file into the active project."""
+    with _open_project() as (project_path, conn):
         summary = ingest_rows(conn, csv_path, project_path)
         logger.info(
             f"Done: {summary['rows_created']} rows, "
@@ -100,24 +212,35 @@ def ingest_rows_cmd(
 
 
 @app.command()
-def run(project_name: str = typer.Argument(help="Project to run the full pipeline on.")):
-    """Run the full clustering pipeline."""
-    with _open_project(project_name) as (project_path, conn):
+def run():
+    """Run the full clustering pipeline on the active project."""
+    with _open_project() as (project_path, conn):
         active = get_active_job(conn)
         if active:
-            logger.error(
-                f"Job {active['job_id']} is already active. "
-                "Only one job can run at a time."
-            )
-            raise typer.Exit(code=1)
+            if active["cancel_requested_at"]:
+                mark_canceled(conn, active["job_id"])
+                logger.warning(
+                    f"Auto-recovered orphaned job {active['job_id']} "
+                    "(cancel was already requested)."
+                )
+            else:
+                logger.error(
+                    f"Job {active['job_id']} is already active. "
+                    "Only one job can run at a time."
+                )
+                raise typer.Exit(code=1)
 
         plan = load_plan(project_path / settings.PLAN_YAML)
         job_id = create_job(conn, "full_run")
         start_job(conn, job_id)
-        logger.info(f"Started job {job_id} for project '{project_name}'")
+        logger.info(f"Started job {job_id}")
+
+        def _on_step(name, completed, total):
+            total_str = str(total) if total else "?"
+            console.print(f"  [{completed}/{total_str}] {name} done")
 
         try:
-            summary = run_pipeline(conn, project_path, plan, job_id)
+            summary = run_pipeline(conn, project_path, plan, job_id, on_step=_on_step)
             succeed_job(conn, job_id)
             logger.info(f"Job {job_id} succeeded: {summary}")
         except PipelineCancelled:
@@ -130,15 +253,15 @@ def run(project_name: str = typer.Argument(help="Project to run the full pipelin
 
 
 @app.command()
-def jobs(project_name: str = typer.Argument(help="Project to list jobs for.")):
-    """List recent jobs for a project."""
-    with _open_project(project_name) as (_project_path, conn):
+def jobs():
+    """List recent jobs for the active project."""
+    with _open_project() as (_project_path, conn):
         rows = list_jobs(conn)
         if not rows:
             console.print("[dim]No jobs found.[/dim]")
             return
 
-        table = Table(title=f"Jobs for '{project_name}'")
+        table = Table(title=f"Jobs for '{_project_path.name}'")
         table.add_column("ID", style="bold")
         table.add_column("Type")
         table.add_column("Status")
@@ -167,11 +290,10 @@ def jobs(project_name: str = typer.Argument(help="Project to list jobs for.")):
 
 @app.command()
 def job(
-    project_name: str = typer.Argument(help="Project name."),
     job_id: int = typer.Argument(help="Job ID to inspect."),
 ):
     """Show details for a single job."""
-    with _open_project(project_name) as (_project_path, conn):
+    with _open_project() as (_project_path, conn):
         row = get_job(conn, job_id)
         if row is None:
             logger.error(f"Job {job_id} not found.")
@@ -205,11 +327,11 @@ def job(
 
 @app.command()
 def cancel(
-    project_name: str = typer.Argument(help="Project name."),
     job_id: int = typer.Argument(help="Job ID to cancel."),
+    force: bool = typer.Option(False, "--force", help="Immediately mark the job as canceled."),
 ):
     """Request cancellation of a running job."""
-    with _open_project(project_name) as (_project_path, conn):
+    with _open_project() as (_project_path, conn):
         row = get_job(conn, job_id)
         if row is None:
             logger.error(f"Job {job_id} not found.")
@@ -219,18 +341,68 @@ def cancel(
             logger.warning(f"Job {job_id} is already {row['status']}. Cannot cancel.")
             return
 
-        request_cancel(conn, job_id)
-        logger.info(f"Cancellation requested for job {job_id}.")
+        if force:
+            mark_canceled(conn, job_id)
+            logger.info(f"Job {job_id} force-canceled.")
+        else:
+            request_cancel(conn, job_id)
+            logger.info(
+                f"Cancellation requested for job {job_id}. "
+                "If the pipeline process is no longer running, use --force."
+            )
+
+
+@app.command()
+def logs(
+    job_id: int | None = typer.Argument(default=None, help="Job ID to show logs for (optional)."),
+):
+    """Browse job logs. Shows recent logs, or detailed logs for a specific job."""
+    with _open_project() as (_project_path, conn):
+        if job_id is not None:
+            entries = get_job_logs(conn, job_id)
+            if not entries:
+                console.print(f"[dim]No logs for job {job_id}.[/dim]")
+                return
+            for entry in entries:
+                level_style = {"error": "red", "warning": "yellow", "debug": "dim"}.get(entry["level"], "")
+                ts = entry["created_at"]
+                msg = entry["message"]
+                line = f"{ts}  job={entry['job_id']}  [{entry['level']}]  {msg}"
+                if entry["payload_json"]:
+                    line += f"\n    {entry['payload_json']}"
+                if level_style:
+                    console.print(f"[{level_style}]{line}[/{level_style}]")
+                else:
+                    console.print(line)
+        else:
+            entries = get_recent_logs(conn)
+            if not entries:
+                console.print("[dim]No logs found.[/dim]")
+                return
+            table = Table(title="Recent Logs")
+            table.add_column("Time")
+            table.add_column("Job", style="bold")
+            table.add_column("Level")
+            table.add_column("Message")
+            for entry in entries:
+                level_style = {"error": "red", "warning": "yellow", "debug": "dim"}.get(entry["level"], "")
+                level_text = f"[{level_style}]{entry['level']}[/{level_style}]" if level_style else entry["level"]
+                table.add_row(
+                    entry["created_at"] or "",
+                    str(entry["job_id"]),
+                    level_text,
+                    (entry["message"] or "")[:80],
+                )
+            console.print(table)
 
 
 @app.command()
 def export(
-    project_name: str = typer.Argument(help="Project to export from."),
     cluster_run: int = typer.Option(..., "--cluster-run", help="Cluster run ID to export."),
     output: Path | None = typer.Option(None, "--output", "-o", help="Output file path. Defaults to stdout."),
 ):
     """Export a cluster run's results to CSV."""
-    with _open_project(project_name) as (_project_path, conn):
+    with _open_project() as (_project_path, conn):
         try:
             csv_text = export_cluster_run(conn, cluster_run)
             if output:
@@ -245,11 +417,11 @@ def export(
 
 @app.command()
 def serve(
-    project_name: str = typer.Argument(help="Project to serve."),
     host: str = typer.Option("127.0.0.1", "--host", help="Bind address."),
     port: int = typer.Option(8000, "--port", help="Bind port."),
 ):
-    """Start the fluster API server for a project."""
+    """Start the fluster API server for the active project."""
+    project_name = _resolve_project()
     if not project_exists(project_name):
         logger.error(f"Project '{project_name}' does not exist.")
         raise typer.Exit(code=1)
@@ -265,12 +437,12 @@ def serve(
 
 @app.command()
 def chill(
-    project_name: str = typer.Argument(help="Project to visualize."),
     port: int = typer.Option(3000, "--port", help="Port to serve on."),
     host: str = typer.Option("127.0.0.1", "--host", help="Bind address."),
     dev: bool = typer.Option(False, "--dev", help="Run SvelteKit dev server instead of production build."),
 ):
-    """Launch the fluster visualization UI for a project."""
+    """Launch the fluster visualization UI for the active project."""
+    project_name = _resolve_project()
     if not project_exists(project_name):
         logger.error(f"Project '{project_name}' does not exist.")
         raise typer.Exit(code=1)
