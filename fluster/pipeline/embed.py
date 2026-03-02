@@ -6,6 +6,8 @@ import sqlite3
 import warnings
 from pathlib import Path
 
+import numpy
+
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
 warnings.filterwarnings("ignore", message=".*unauthenticated.*")
@@ -22,7 +24,7 @@ from fluster.db.schema import ensure_vec_table
 from fluster.jobs.manager import is_cancel_requested, update_progress
 
 _BATCH_SIZE = 8
-_VISION_MODEL = "nomic-ai/nomic-embed-vision-v1.5"
+_VISION_MODEL = "openai/clip-vit-large-patch14"
 
 
 def _get_text_reps(conn: sqlite3.Connection, text_model_name: str) -> list:
@@ -75,23 +77,19 @@ def _embed_images(
     project_dir: Path,
     dimensions: int,
 ) -> int:
-    """Embed image items using nomic-embed-vision-v1.5.
+    """Embed image items using CLIP (openai/clip-vit-large-patch14).
 
     Returns the number of items embedded.
     """
     import torch
     import torch.nn.functional as F
     from PIL import Image
-    from transformers import AutoImageProcessor, AutoModel
+    from transformers import CLIPModel, CLIPProcessor
 
-    logger.info("Loading nomic-embed-vision-v1.5 for image embedding...")
-    processor = AutoImageProcessor.from_pretrained(_VISION_MODEL)
-    vision_model = AutoModel.from_pretrained(_VISION_MODEL, trust_remote_code=True)
-    # Workaround: transformers >=5.1.0 expects all_tied_weights_keys but
-    # trust_remote_code models may skip post_init() where it's set.
-    if not hasattr(vision_model, "all_tied_weights_keys"):
-        vision_model.all_tied_weights_keys = {}
-    vision_model.eval()
+    logger.info("Loading CLIP for image embedding...")
+    clip_model = CLIPModel.from_pretrained(_VISION_MODEL)
+    clip_processor = CLIPProcessor.from_pretrained(_VISION_MODEL)
+    clip_model.eval()
 
     embedded = 0
     batch_iter = tqdm(
@@ -110,14 +108,17 @@ def _embed_images(
             img = Image.open(img_path).convert("RGB")
             images.append(img)
 
-        inputs = processor(images, return_tensors="pt")
+        inputs = clip_processor(images=images, return_tensors="pt")
         with torch.no_grad():
-            outputs = vision_model(**inputs)
+            outputs = clip_model.get_image_features(**inputs)
 
-        vectors = F.normalize(outputs.last_hidden_state[:, 0], p=2, dim=1)
+        vectors = F.normalize(outputs.pooler_output, p=2, dim=1)
 
         for rep, vector in zip(batch, vectors):
             vec_np = vector.cpu().numpy()
+            if numpy.isnan(vec_np).any():
+                logger.warning(f"NaN vector for representation {rep['representation_id']}; zeroing")
+                vec_np = numpy.zeros_like(vec_np)
             cursor = conn.execute(
                 "INSERT INTO embeddings (representation_id, model_name, dimensions) "
                 "VALUES (?, ?, ?)",
@@ -132,7 +133,7 @@ def _embed_images(
 
         conn.commit()
 
-    del vision_model, processor
+    del clip_model, clip_processor
     return embedded
 
 
@@ -145,7 +146,7 @@ def embed_items(
     """Embed all representations that don't yet have an embedding.
 
     Text items are embedded with the model specified in plan.embedding.
-    Image items are embedded with nomic-embed-vision-v1.5 (same 768D space).
+    Image items are embedded with CLIP (openai/clip-vit-large-patch14, 768D).
     Checks for cancellation between batches when job_id is provided.
 
     Returns a summary dict with counts.
@@ -218,7 +219,7 @@ def embed_items(
     # --- Image pass ---
     if image_reps and project_dir is not None:
         if not dimensions:
-            # No text items were embedded; ensure vec table with 768D (nomic vision output).
+            # No text items were embedded; ensure vec table with 768D (CLIP output).
             dimensions = 768
             ensure_vec_table(conn, dimensions)
 
