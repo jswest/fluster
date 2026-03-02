@@ -21,15 +21,32 @@ def _load_caption_model():
     if _caption_model is not None:
         return _caption_model
 
+    import warnings
+
     import torch
+    import transformers
     from transformers import AutoModelForCausalLM
 
     logger.info("Loading moondream2 caption model...")
-    _caption_model = AutoModelForCausalLM.from_pretrained(
-        "vikhyatk/moondream2",
-        trust_remote_code=True,
-        torch_dtype=torch.float32,
-    )
+
+    prev_verbosity = transformers.logging.get_verbosity()
+    transformers.logging.set_verbosity_error()
+    try:
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message="`torch_dtype` is deprecated")
+            _caption_model = AutoModelForCausalLM.from_pretrained(
+                "vikhyatk/moondream2",
+                revision="2025-06-21",
+                trust_remote_code=True,
+                torch_dtype=torch.float32,
+            )
+    finally:
+        transformers.logging.set_verbosity(prev_verbosity)
+
+    # Workaround: transformers >=5.1.0 skips post_init() for trust_remote_code models,
+    # causing missing 'all_tied_weights_keys'. Safe to call twice if later fixed upstream.
+    _caption_model.post_init()
+
     _caption_model.eval()
     return _caption_model
 
