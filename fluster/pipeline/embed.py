@@ -67,13 +67,17 @@ def embed_items(
 
     for batch_start in batch_iter:
         batch = reps[batch_start : batch_start + _BATCH_SIZE]
+        prefix = plan.embedding.task_prefix
+        prefix_len = len(tokenizer.encode(prefix, add_special_tokens=False))
+        text_budget = max_tokens - prefix_len
+
         texts = []
         for r in batch:
             text = r["text"]
             tokens = tokenizer.encode(text, add_special_tokens=False)
-            if len(tokens) > max_tokens:
-                text = tokenizer.decode(tokens[:max_tokens])
-            texts.append(plan.embedding.task_prefix + text)
+            if len(tokens) > text_budget:
+                text = tokenizer.decode(tokens[:text_budget])
+            texts.append(prefix + text)
         vectors = model.encode(texts, normalize_embeddings=True)
 
         for rep, vector in zip(batch, vectors):
