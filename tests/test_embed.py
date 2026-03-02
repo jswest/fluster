@@ -1,11 +1,17 @@
 """Tests for embed_items (Phase 8)."""
 
+from unittest.mock import MagicMock
+
 import pytest
+from PIL import Image
 
 from fluster.config.plan import Plan
 from fluster.db.connection import connect
+from fluster.db.schema import ensure_vec_table
 from fluster.jobs.manager import create_job, request_cancel
-from fluster.pipeline.embed import embed_items, _BATCH_SIZE
+from fluster.pipeline import embed as embed_mod
+from fluster.pipeline import materialize as materialize_mod
+from fluster.pipeline.embed import embed_items, _BATCH_SIZE, _VISION_MODEL
 from fluster.pipeline.ingest import ingest_rows
 from fluster.pipeline.materialize import materialize_items
 
@@ -198,3 +204,138 @@ def test_vec_similarity_search(project):
     assert len(results) == 2
     # First result should be identical (distance ~0).
     assert results[0]["distance"] < 0.01
+
+
+# --- Image embedding ---
+
+def _create_test_image(path, width=4, height=4):
+    img = Image.new("RGB", (width, height), color=(255, 0, 0))
+    img.save(path, format="PNG")
+    return path
+
+
+def _mock_caption_model():
+    model = MagicMock()
+    model.caption.return_value = {"caption": "A test image"}
+    return model
+
+
+def _fake_embed_images(conn, image_reps, project_dir, dimensions):
+    """Test stand-in for _embed_images that inserts fake 768D vectors."""
+    import torch
+    import torch.nn.functional as F
+
+    torch.manual_seed(42)
+    embedded = 0
+    for rep in image_reps:
+        vec = torch.randn(768)
+        vec = F.normalize(vec, p=2, dim=0).numpy()
+        cursor = conn.execute(
+            "INSERT INTO embeddings (representation_id, model_name, dimensions) "
+            "VALUES (?, ?, ?)",
+            (rep["representation_id"], _VISION_MODEL, dimensions),
+        )
+        embedding_id = cursor.lastrowid
+        conn.execute(
+            "INSERT INTO vec_embeddings (embedding_id, vector) VALUES (?, ?)",
+            (embedding_id, vec.tobytes()),
+        )
+        embedded += 1
+    conn.commit()
+    return embedded
+
+
+def _setup_image_item(pdir, conn, monkeypatch):
+    """Ingest and materialize a single image item with mocked captioning."""
+    img_file = pdir / "photo.png"
+    _create_test_image(img_file)
+
+    mock_caption = _mock_caption_model()
+    monkeypatch.setattr(materialize_mod, "_caption_model", mock_caption)
+
+    csv_file = pdir / "data.csv"
+    csv_file.write_text(f"name,file_path\nphoto,{img_file}\n")
+    ingest_rows(conn, csv_file, pdir)
+    materialize_items(conn, pdir)
+
+
+def test_embed_image_uses_vision_model(project, monkeypatch):
+    """Image items should be embedded with the vision model, not the text model."""
+    pdir, conn = project
+    _setup_image_item(pdir, conn, monkeypatch)
+
+    monkeypatch.setattr(embed_mod, "_embed_images", _fake_embed_images)
+    ensure_vec_table(conn, 768)
+
+    plan = Plan()
+    summary = embed_items(conn, plan, project_dir=pdir)
+
+    assert summary["embedded"] == 1
+
+    emb = conn.execute("SELECT * FROM embeddings").fetchone()
+    assert emb["model_name"] == _VISION_MODEL
+    assert emb["dimensions"] == 768
+
+
+def test_embed_mixed_text_and_image(project, monkeypatch):
+    """Mixed project: text items get text model, image items get vision model."""
+    pdir, conn = project
+
+    txt_file = pdir / "doc.txt"
+    txt_file.write_text("Some text content")
+
+    img_file = pdir / "photo.png"
+    _create_test_image(img_file)
+
+    mock_caption = _mock_caption_model()
+    monkeypatch.setattr(materialize_mod, "_caption_model", mock_caption)
+
+    csv_file = pdir / "data.csv"
+    csv_file.write_text(f"name,file_path\ndoc,{txt_file}\nphoto,{img_file}\n")
+    ingest_rows(conn, csv_file, pdir)
+    materialize_items(conn, pdir)
+
+    monkeypatch.setattr(embed_mod, "_embed_images", _fake_embed_images)
+
+    plan = Plan()
+    summary = embed_items(conn, plan, project_dir=pdir)
+
+    assert summary["embedded"] == 2
+
+    embs = conn.execute(
+        "SELECT model_name FROM embeddings ORDER BY embedding_id"
+    ).fetchall()
+    model_names = {e["model_name"] for e in embs}
+    assert plan.embedding.model_name in model_names
+    assert _VISION_MODEL in model_names
+
+
+def test_embed_image_idempotent(project, monkeypatch):
+    """Image embeddings should not be re-created on second run."""
+    pdir, conn = project
+    _setup_image_item(pdir, conn, monkeypatch)
+
+    monkeypatch.setattr(embed_mod, "_embed_images", _fake_embed_images)
+    ensure_vec_table(conn, 768)
+
+    plan = Plan()
+    embed_items(conn, plan, project_dir=pdir)
+
+    # Second run: no image reps should be found
+    summary = embed_items(conn, plan, project_dir=pdir)
+    assert summary["embedded"] == 0
+
+    count = conn.execute("SELECT COUNT(*) FROM embeddings").fetchone()[0]
+    assert count == 1
+
+
+def test_embed_no_project_dir_skips_images(project, monkeypatch):
+    """Without project_dir, image items should be silently skipped."""
+    pdir, conn = project
+    _setup_image_item(pdir, conn, monkeypatch)
+
+    plan = Plan()
+    summary = embed_items(conn, plan)
+
+    # No embeddings created — image items need project_dir
+    assert summary["embedded"] == 0

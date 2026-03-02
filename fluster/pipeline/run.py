@@ -70,7 +70,7 @@ def run_pipeline(
 
     # Step 2: embed
     log_job(conn, job_id, "Starting embed_items")
-    result = embed_items(conn, plan, job_id=job_id)
+    result = embed_items(conn, plan, project_dir=project_path, job_id=job_id)
     log_job(conn, job_id, "embed_items complete", payload=result)
     _step("embed")
     _check_cancel(conn, job_id)
