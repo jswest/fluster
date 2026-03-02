@@ -289,6 +289,10 @@
 			class:active={filterMode === 'hide'}
 			onclick={() => filterMode = 'hide'}
 		>Hide</button>
+		<button
+			class="mode-btn"
+			onclick={() => { zoom = 1; panX = 0; panY = 0; }}
+		>Reset view</button>
 	</div>
 
 	<div class="canvas-wrap" bind:this={container}>
