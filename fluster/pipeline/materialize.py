@@ -15,19 +15,19 @@ def _is_image(mime_type: str | None) -> bool:
     return mime_type is not None and mime_type.startswith("image/")
 
 
-_FASTVLM_MODEL_ID = "KamilaMila/FastVLM-0.5B"
+_CAPTION_MODEL_ID = "florence-community/Florence-2-base"
 
 
 def _load_caption_model():
-    """Lazy-load FastVLM-0.5B for image captioning. Cached after first call."""
+    """Lazy-load Florence-2 for image captioning. Cached after first call."""
     global _caption_cache
     if _caption_cache is not None:
         return _caption_cache
 
     import torch
-    from transformers import AutoProcessor, FastVlmForConditionalGeneration
+    from transformers import AutoProcessor, Florence2ForConditionalGeneration
 
-    logger.info("Loading FastVLM-0.5B caption model...")
+    logger.info(f"Loading {_CAPTION_MODEL_ID} caption model...")
 
     if torch.backends.mps.is_available():
         device = torch.device("mps")
@@ -38,19 +38,19 @@ def _load_caption_model():
 
     dtype = torch.float16 if device.type == "cuda" else torch.float32
 
-    model = FastVlmForConditionalGeneration.from_pretrained(
-        _FASTVLM_MODEL_ID, torch_dtype=dtype,
+    model = Florence2ForConditionalGeneration.from_pretrained(
+        _CAPTION_MODEL_ID, torch_dtype=dtype,
     ).to(device)
     model.eval()
-    processor = AutoProcessor.from_pretrained(_FASTVLM_MODEL_ID)
+    processor = AutoProcessor.from_pretrained(_CAPTION_MODEL_ID)
 
     _caption_cache = (model, processor, device)
-    logger.info(f"FastVLM loaded on {device} ({dtype})")
+    logger.info(f"Florence-2 loaded on {device} ({dtype})")
     return _caption_cache
 
 
 def _caption_image(stored_path: str, project_dir: Path, model, processor, device) -> str:
-    """Generate a text caption for an image using FastVLM."""
+    """Generate a text caption for an image using Florence-2."""
     import torch
     from PIL import Image
 
@@ -58,31 +58,23 @@ def _caption_image(stored_path: str, project_dir: Path, model, processor, device
     try:
         img = Image.open(full_path).convert("RGB")
 
-        conversation = [
-            {"role": "user", "content": [
-                {"type": "image"},
-                {"type": "text", "text": "Describe this image in one sentence."},
-            ]},
-        ]
-        prompt = processor.apply_chat_template(
-            conversation, add_generation_prompt=True,
-        )
         inputs = processor(
-            images=img, text=prompt, return_tensors="pt",
+            text="<CAPTION>", images=img, return_tensors="pt",
         ).to(device)
 
         with torch.no_grad():
             output = model.generate(
-                **inputs, max_new_tokens=60,
-                eos_token_id=processor.tokenizer.eos_token_id,
+                input_ids=inputs["input_ids"],
+                pixel_values=inputs["pixel_values"],
+                max_new_tokens=100,
+                do_sample=False,
             )
 
-        new_tokens = output[0][inputs["input_ids"].shape[1]:]
-        text = processor.batch_decode(
-            [new_tokens], skip_special_tokens=True,
-            clean_up_tokenization_spaces=False,
-        )[0]
-        return text.strip()
+        text = processor.batch_decode(output, skip_special_tokens=False)[0]
+        parsed = processor.post_process_generation(
+            text, task="<CAPTION>", image_size=(img.width, img.height),
+        )
+        return parsed["<CAPTION>"]
     except Exception as e:
         logger.warning(f"Failed to caption image {full_path}: {e}")
         return ""

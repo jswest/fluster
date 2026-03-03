@@ -214,7 +214,7 @@ def _create_test_image(path, width=4, height=4):
 
 
 def _patch_caption(monkeypatch, caption_text="A test image of a red square"):
-    """Patch _load_caption_model and _caption_image to avoid loading FastVLM."""
+    """Patch _load_caption_model and _caption_image to avoid loading Florence-2."""
     sentinel = (MagicMock(name="fake-model"), MagicMock(name="fake-processor"), "cpu")
     monkeypatch.setattr(materialize_mod, "_load_caption_model", lambda: sentinel)
     calls = []
