@@ -234,7 +234,7 @@ def plan_cmd():
         console.print(f"\nPlan saved to {plan_path}")
         console.print(f"  LLM:        {plan.llm.provider.value} / {plan.llm.model}")
         console.print(f"  Clustering:  min_cluster_size={min_cluster}, min_samples={min_samples}")
-        console.print(f"               cluster_selection_method={method}, epsilon={epsilon}")
+        console.print(f"               cluster_selection_method={method}, cluster_selection_epsilon={epsilon}")
         console.print(f"  Images:      caption={'on' if caption else 'off'}")
 
 
