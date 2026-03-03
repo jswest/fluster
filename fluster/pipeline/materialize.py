@@ -2,7 +2,6 @@
 
 import hashlib
 import json
-import re
 import sqlite3
 from pathlib import Path
 
@@ -86,14 +85,11 @@ def _caption_image(stored_path: str, project_dir: Path, model, tokenizer, device
                 attention_mask=attention_mask,
                 images=px,
                 max_new_tokens=60,
+                eos_token_id=tokenizer.eos_token_id,
             )
         # Only decode new tokens (skip the prompt)
         new_tokens = output[0][input_ids.shape[1]:]
         text = tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
-        # Take only the first sentence to avoid hallucinated Q&A
-        m = re.search(r'(?<=[^0-9])[.!?]', text)
-        if m:
-            text = text[: m.end()]
         return text
     except Exception as e:
         logger.warning(f"Failed to caption image {full_path}: {e}")
