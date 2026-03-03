@@ -11,10 +11,12 @@
 
 	interface Props {
 		itemId: number;
+		clusterId?: number;
+		clusterLabel?: string;
 		onClose: () => void;
 	}
 
-	let { itemId, onClose }: Props = $props();
+	let { itemId, clusterId, clusterLabel, onClose }: Props = $props();
 
 	let item: ItemDetail | null = $state(null);
 	let loading = $state(true);
@@ -74,7 +76,14 @@
 				<span class="field-value">{item.recordName || 'unnamed'}</span>
 			</div>
 
-				{#if item.imageArtifactId}
+			{#if clusterId != null}
+				<div class="field">
+					<span class="muted">Cluster</span>
+					<span class="field-value">{clusterId}{clusterLabel ? ` — ${clusterLabel}` : ''}</span>
+				</div>
+			{/if}
+
+			{#if item.imageArtifactId}
 				<div class="field">
 					<span class="muted">Image</span>
 					<img

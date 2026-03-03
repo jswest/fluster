@@ -34,15 +34,18 @@
 
 	.project-name {
 		font-weight: 700;
+		font-size: 1.125rem;
+		letter-spacing: 0.05em;
 	}
 
 	nav a {
-		color: inherit;
+		color: var(--color-fg-secondary);
 		text-decoration: none;
-		font-weight: 600;
+		font-weight: 400;
 	}
 
 	nav a:hover {
+		color: var(--color-fg);
 		border-bottom: 2px solid var(--color-fg);
 	}
 

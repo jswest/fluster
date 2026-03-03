@@ -45,6 +45,17 @@
 		return String(value);
 	}
 
+	const parsedParams: Record<string, unknown> = $derived.by(() => {
+		try { return JSON.parse(data.run.paramsJson); } catch { return {}; }
+	});
+
+	const inspectedCluster = $derived.by(() => {
+		if (inspectItemId == null) return null;
+		const point = data.points.find(p => p.itemId === inspectItemId);
+		if (!point) return null;
+		return data.clusters.find(c => c.clusterId === point.clusterId) ?? null;
+	});
+
 	function handlePointSelect(itemId: number) {
 		inspectItemId = itemId;
 	}
@@ -63,10 +74,12 @@
 					<span class="muted">Method</span>
 					<span>{data.run.method}</span>
 				</div>
-				<div class="meta-row">
-					<span class="muted">Params</span>
-					<span>{data.run.paramsJson}</span>
-				</div>
+				{#each Object.entries(parsedParams) as [key, value]}
+					<div class="meta-row">
+						<span class="muted">{formatMetricLabel(key)}</span>
+						<span>{formatMetricValue(value)}</span>
+					</div>
+				{/each}
 				<div class="meta-row">
 					<span class="muted">Clusters</span>
 					<span>{data.clusters.length}</span>
@@ -132,7 +145,7 @@
 		{/if}
 
 		{#if inspectItemId != null}
-			<ItemDrawer itemId={inspectItemId} onClose={() => inspectItemId = null} />
+			<ItemDrawer itemId={inspectItemId} clusterId={inspectedCluster?.clusterId} clusterLabel={inspectedCluster?.label} onClose={() => inspectItemId = null} />
 		{/if}
 
 		{#if showCritique && data.critique}
