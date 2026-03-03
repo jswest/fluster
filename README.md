@@ -8,7 +8,7 @@
 - Extract and normalize text
 - Generate embeddings
 - Reduce dimensions (PCA + UMAP)
-- Cluster (HDBSCAN by default)
+- Cluster (HDBSCAN or agglomerative)
 - Label clusters with an LLM (BYO)
 - Critique the clustering run
 - Keep an auditable trail of every step
@@ -150,7 +150,7 @@ Everything else becomes searchable metadata.
 
 If `file_path` points to an image (`.jpg`, `.png`, etc.), fluster will:
 
-1. **Caption it** locally with [moondream2](https://huggingface.co/vikhyatk/moondream2) — the caption becomes the row's searchable text
+1. **Caption it** locally with [Florence-2](https://huggingface.co/florence-community/Florence-2-base) — the caption becomes the row's searchable text
 2. **Embed it** with [nomic-embed-vision-v1.5](https://huggingface.co/nomic-ai/nomic-embed-vision-v1.5) — same 768D space as text, so images and text cluster together naturally
 3. **Display it** in the UI — thumbnails on hover, full preview in the detail drawer
 
