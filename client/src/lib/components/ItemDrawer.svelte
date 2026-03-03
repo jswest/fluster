@@ -124,10 +124,10 @@
 		overflow-y: auto;
 		padding: 1rem;
 		z-index: 7;
-		background: rgba(255, 255, 255, 0.92);
+		background: rgba(10, 10, 15, 0.92);
 		backdrop-filter: blur(8px);
 		-webkit-backdrop-filter: blur(8px);
-		border-left: 1px solid var(--color-secondary-dark);
+		border-left: 1px solid var(--color-fg-secondary);
 	}
 
 	.drawer-header {
@@ -186,7 +186,7 @@
 	.item-image {
 		max-width: 100%;
 		height: auto;
-		border: 1px solid var(--color-secondary-dark);
+		border: 1px solid var(--color-fg-secondary);
 	}
 
 	.embedding-text {
@@ -196,8 +196,8 @@
 		line-height: 1.5;
 		margin: 0;
 		padding: 0.5rem;
-		background: rgba(0, 0, 0, 0.03);
-		border: 1px solid var(--color-secondary-dark);
+		background: rgba(255, 255, 255, 0.05);
+		border: 1px solid var(--color-fg-secondary);
 	}
 
 	.expand-btn {

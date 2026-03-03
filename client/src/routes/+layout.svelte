@@ -29,7 +29,7 @@
 		align-items: center;
 		gap: 1.5rem;
 		padding: 0.75rem 1rem;
-		border-bottom: 1px solid var(--color-primary-dark);
+		border-bottom: 1px solid var(--color-fg);
 	}
 
 	.project-name {
@@ -43,7 +43,7 @@
 	}
 
 	nav a:hover {
-		border-bottom: 2px solid var(--color-primary-dark);
+		border-bottom: 2px solid var(--color-fg);
 	}
 
 	.db-path {

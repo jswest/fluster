@@ -22,12 +22,14 @@
 
 	// --- Canvas refs ---
 	let canvas: HTMLCanvasElement | undefined = $state();
+	let glowCanvas: HTMLCanvasElement | undefined = $state();
 	let container: HTMLDivElement | undefined = $state();
 	const POINT_RADIUS = 3;
 	const HOVER_RADIUS = 4;
 	const HIT_THRESHOLD = 20;
 	const PADDING = 40;
 	const MIN_ZOOM = 0.5;
+	const GLOW_RADIUS = 24;
 
 	// --- Transform state (pan + zoom) ---
 	let panX = $state(0);
@@ -137,25 +139,34 @@
 
 	// --- Drawing ---
 	$effect(() => {
-		if (!canvas || !container) return;
+		if (!canvas || !glowCanvas || !container) return;
 		const ctx = canvas.getContext('2d');
-		if (!ctx) return;
+		const gctx = glowCanvas.getContext('2d');
+		if (!ctx || !gctx) return;
 
 		const width = container.clientWidth;
 		const height = container.clientHeight;
 		if (width <= 0 || height <= 0) return;
 
 		const dpr = window.devicePixelRatio || 1;
-		canvas.width = width * dpr;
-		canvas.height = height * dpr;
-		canvas.style.width = width + 'px';
-		canvas.style.height = height + 'px';
+
+		// Size both canvases
+		for (const c of [canvas, glowCanvas]) {
+			c.width = width * dpr;
+			c.height = height * dpr;
+			c.style.width = width + 'px';
+			c.style.height = height + 'px';
+		}
 		ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+		gctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+		// Read theme colors for canvas use
+		const style = getComputedStyle(container);
+		const fgColor = style.getPropertyValue('--color-fg').trim();
 
 		// Clear
 		ctx.clearRect(0, 0, width, height);
-		ctx.fillStyle = '#FFFFFF';
-		ctx.fillRect(0, 0, width, height);
+		gctx.clearRect(0, 0, width, height);
 
 		// Access reactive dependencies so the effect re-runs on state changes
 		const _zoom = zoom;
@@ -167,28 +178,41 @@
 		const _focusClusterId = focusClusterId;
 		const _filterMode = filterMode;
 
-		// Draw points
+		// Draw glow + points in a single loop
 		for (const p of points) {
 			const vis = isPointVisible(p, _matchSet, _focusClusterId, _filterMode);
 			if (vis === 'hidden') continue;
 
 			const [sx, sy] = dataToScreen(p.x, p.y, width, height);
+			const color = getColor(p.clusterId);
 
-			// Skip offscreen
+			// Glow pass (skip if far offscreen — glow extends further)
+			if (sx > -50 && sx < width + 50 && sy > -50 && sy < height + 50) {
+				gctx.globalAlpha = vis === 'faded' ? 0.03 : 0.22;
+				const grad = gctx.createRadialGradient(sx, sy, 0, sx, sy, GLOW_RADIUS);
+				grad.addColorStop(0, color);
+				grad.addColorStop(1, 'transparent');
+				gctx.fillStyle = grad;
+				gctx.beginPath();
+				gctx.arc(sx, sy, GLOW_RADIUS, 0, Math.PI * 2);
+				gctx.fill();
+			}
+
+			// Point pass (tighter offscreen check)
 			if (sx < -10 || sx > width + 10 || sy < -10 || sy > height + 10) continue;
 
 			const isHovered = _hoveredPoint?.itemId === p.itemId;
 			const isSelected = _selectedItemId === p.itemId;
 
 			ctx.globalAlpha = vis === 'faded' ? 0.1 : 1;
-			ctx.fillStyle = getColor(p.clusterId);
+			ctx.fillStyle = color;
 			ctx.beginPath();
 			ctx.arc(sx, sy, isHovered ? HOVER_RADIUS : POINT_RADIUS, 0, Math.PI * 2);
 			ctx.fill();
 
 			if (isSelected) {
 				ctx.globalAlpha = 1;
-				ctx.strokeStyle = '#000000';
+				ctx.strokeStyle = fgColor;
 				ctx.lineWidth = 2;
 				ctx.beginPath();
 				ctx.arc(sx, sy, POINT_RADIUS + 3, 0, Math.PI * 2);
@@ -197,6 +221,7 @@
 		}
 
 		ctx.globalAlpha = 1;
+		gctx.globalAlpha = 1;
 	});
 
 	// --- Event handlers ---
@@ -297,6 +322,7 @@
 	</div>
 
 	<div class="canvas-wrap" bind:this={container}>
+		<canvas class="glow-layer" bind:this={glowCanvas}></canvas>
 		<canvas
 			bind:this={canvas}
 			onmousedown={handleMouseDown}
@@ -360,15 +386,16 @@
 	}
 
 	.mode-btn.active {
-		background: var(--color-primary-light);
-		color: var(--color-primary-dark);
-		border: 1px solid var(--color-primary-dark);
+		background: var(--color-bg);
+		color: var(--color-fg);
+		border: 1px solid var(--color-fg);
 	}
 
 	.canvas-wrap {
 		position: absolute;
 		inset: 0;
 		cursor: grab;
+		background: var(--color-bg);
 	}
 
 	.canvas-wrap:active {
@@ -376,13 +403,20 @@
 	}
 
 	canvas {
+		position: absolute;
+		inset: 0;
 		display: block;
+	}
+
+	.glow-layer {
+		filter: blur(20px);
+		pointer-events: none;
 	}
 
 	.tooltip {
 		position: absolute;
-		background: var(--color-primary-dark);
-		color: var(--color-primary-light);
+		background: var(--color-bg-secondary);
+		color: var(--color-fg);
 		padding: 0.5rem;
 		font-size: 0.75rem;
 		max-width: 20rem;
@@ -411,6 +445,6 @@
 
 	.tooltip-cluster {
 		font-size: 0.6875rem;
-		color: var(--color-secondary-dark);
+		color: var(--color-fg-secondary);
 	}
 </style>

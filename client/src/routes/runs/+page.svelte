@@ -38,10 +38,10 @@
 	a {
 		color: inherit;
 		text-decoration: none;
-		border-bottom: 1px solid var(--color-secondary-dark);
+		border-bottom: 1px solid var(--color-fg-secondary);
 	}
 
 	a:hover {
-		border-bottom-color: var(--color-primary-dark);
+		border-bottom-color: var(--color-fg);
 	}
 </style>

@@ -30,7 +30,7 @@
 	}
 
 	.bar {
-		background: var(--color-primary-dark);
+		background: var(--color-fg);
 		animation: pulse 1s ease-in-out infinite;
 	}
 

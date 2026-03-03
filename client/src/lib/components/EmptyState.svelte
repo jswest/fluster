@@ -19,7 +19,7 @@
 		align-items: center;
 		justify-content: center;
 		padding: 2rem;
-		color: var(--color-secondary-dark);
+		color: var(--color-fg-secondary);
 	}
 
 	.empty-icon {

@@ -1,11 +1,11 @@
 import { scaleOrdinal } from 'd3-scale';
 
 const PALETTE = [
-	'#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f',
-	'#edc948', '#b07aa1', '#ff9da7', '#9c755f', '#bab0ac'
+	'#6B9BD2', '#F5A623', '#E8636B', '#7DD3CC', '#6BBF59',
+	'#F7D96E', '#C98DB8', '#FF9DAF', '#B8917A', '#C8BEB8'
 ];
 
-const NOISE_COLOR = '#999999';
+const NOISE_COLOR = '#555555';
 
 export function createClusterColorScale(clusterIds: number[]): (clusterId: number) => string {
 	const ids = [...new Set(clusterIds)]

@@ -38,10 +38,10 @@
 		padding: 0.25rem 0.5rem;
 	}
 
-	.pill-neutral { border-color: var(--color-secondary-dark); color: var(--color-secondary-dark); }
+	.pill-neutral { border-color: var(--color-fg-secondary); color: var(--color-fg-secondary); }
 	.pill-info    { border-color: var(--color-tertiary);       color: var(--color-tertiary); }
 	.pill-success { border-color: var(--color-success);        color: var(--color-success); }
-	.pill-warn    { border-color: var(--color-secondary-light); color: var(--color-secondary-light); }
+	.pill-warn    { border-color: var(--color-bg-secondary); color: var(--color-bg-secondary); }
 	.pill-danger  { border-color: var(--color-tertiary-invert); color: var(--color-tertiary-invert); }
 
 	.pill-icon {

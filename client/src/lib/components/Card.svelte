@@ -14,8 +14,8 @@
 
 <style>
 	.card {
-		border: 1px solid var(--color-primary-dark);
+		border: 1px solid var(--color-fg);
 		padding: 1rem;
-		background: var(--color-primary-light);
+		background: var(--color-bg);
 	}
 </style>

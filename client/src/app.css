@@ -145,10 +145,10 @@
 :root {
   --font: "Iosevka Term", "Fira Code", "JetBrains Mono", monospace;
   --unit: 16px;
-  --color-primary-dark: #000000;
-  --color-primary-light: #FFFFFF;
-  --color-secondary-dark: #A68F77;
-  --color-secondary-light: #F0D0AD;
+  --color-fg: #E8E8E8;
+  --color-bg: #0A0A0F;
+  --color-fg-secondary: #8A7A66;
+  --color-bg-secondary: #1A1A24;
   --color-tertiary: #98CFEB;
   --color-tertiary-invert: #EB98CF;
   --color-success: #77A68F;
@@ -163,8 +163,8 @@
 html {
   font-family: var(--font);
   font-size: var(--unit);
-  color: var(--color-primary-dark);
-  background: var(--color-primary-light);
+  color: var(--color-fg);
+  background: var(--color-bg);
 }
 
 body {
@@ -181,9 +181,9 @@ h4 { font-size: 1rem; font-weight: 600; margin: 0 0 0.5rem; }
 button {
   font-family: inherit;
   font-size: inherit;
-  background: var(--color-primary-dark);
-  color: var(--color-primary-light);
-  border: 1px solid var(--color-primary-dark);
+  background: var(--color-fg);
+  color: var(--color-bg);
+  border: 1px solid var(--color-fg);
   border-radius: 0;
   padding: 0.5rem 1rem;
   cursor: pointer;
@@ -191,18 +191,18 @@ button {
 }
 
 button:hover {
-  background: var(--color-primary-light);
-  color: var(--color-primary-dark);
+  background: var(--color-bg);
+  color: var(--color-fg);
 }
 
 input {
   font-family: inherit;
   font-size: inherit;
-  border: 1px solid var(--color-primary-dark);
+  border: 1px solid var(--color-fg);
   border-radius: 0;
   padding: 0.5rem;
-  background: var(--color-primary-light);
-  color: var(--color-primary-dark);
+  background: var(--color-bg);
+  color: var(--color-fg);
 }
 
 input:focus {
@@ -211,7 +211,7 @@ input:focus {
 }
 
 a {
-  color: var(--color-primary-dark);
+  color: var(--color-fg);
 }
 
 .container {
@@ -233,7 +233,7 @@ a {
 }
 
 .muted {
-  color: var(--color-secondary-dark);
+  color: var(--color-fg-secondary);
 }
 
 table {
@@ -243,16 +243,16 @@ table {
 
 th {
   text-align: left;
-  border-bottom: 2px solid var(--color-primary-dark);
+  border-bottom: 2px solid var(--color-fg);
   padding: 0.5rem 0.75rem;
   font-weight: 600;
 }
 
 td {
   padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid var(--color-secondary-dark);
+  border-bottom: 1px solid var(--color-fg-secondary);
 }
 
 tbody tr:hover td {
-  background: var(--color-secondary-light);
+  background: var(--color-bg-secondary);
 }

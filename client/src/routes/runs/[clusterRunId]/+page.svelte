@@ -201,7 +201,7 @@
 		flex-shrink: 0;
 		overflow-y: auto;
 		padding: 1rem;
-		border-right: 1px solid var(--color-secondary-dark);
+		border-right: 1px solid var(--color-fg-secondary);
 		display: flex;
 		flex-direction: column;
 		gap: 0.75rem;
@@ -255,10 +255,10 @@
 		overflow-y: auto;
 		padding: 1rem;
 		z-index: 6;
-		background: rgba(255, 255, 255, 0.9);
+		background: rgba(10, 10, 15, 0.9);
 		backdrop-filter: blur(8px);
 		-webkit-backdrop-filter: blur(8px);
-		border-left: 1px solid var(--color-secondary-dark);
+		border-left: 1px solid var(--color-fg-secondary);
 	}
 
 	.critique-header {
@@ -296,11 +296,11 @@
 	}
 
 	.cluster-row:hover {
-		background: rgba(0, 0, 0, 0.04);
+		background: rgba(255, 255, 255, 0.06);
 	}
 
 	.cluster-row.active {
-		background: rgba(0, 0, 0, 0.08);
+		background: rgba(255, 255, 255, 0.1);
 	}
 
 	.swatch {
