@@ -179,6 +179,8 @@
 		const _filterMode = filterMode;
 
 		// Draw glow + points in a single loop
+		ctx.strokeStyle = fgColor;
+		ctx.lineWidth = 0.5;
 		for (const p of points) {
 			const vis = isPointVisible(p, _matchSet, _focusClusterId, _filterMode);
 			if (vis === 'hidden') continue;
@@ -209,14 +211,15 @@
 			ctx.beginPath();
 			ctx.arc(sx, sy, isHovered ? HOVER_RADIUS : POINT_RADIUS, 0, Math.PI * 2);
 			ctx.fill();
+			ctx.stroke();
 
 			if (isSelected) {
 				ctx.globalAlpha = 1;
-				ctx.strokeStyle = fgColor;
 				ctx.lineWidth = 2;
 				ctx.beginPath();
 				ctx.arc(sx, sy, POINT_RADIUS + 3, 0, Math.PI * 2);
 				ctx.stroke();
+				ctx.lineWidth = 0.5;
 			}
 		}
 
