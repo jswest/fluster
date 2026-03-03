@@ -33,7 +33,7 @@ ReductionConfig = PCAReduction | UMAPReduction
 
 
 class ClusteringConfig(BaseModel):
-    method: Literal["hdbscan"] = "hdbscan"
+    method: Literal["hdbscan", "agglomerative"] = "hdbscan"
     reduction: str = "umap_8d"  # Format: "{method}_{dimensions}d"
     params: dict = Field(default_factory=lambda: {"min_cluster_size": 5})
 

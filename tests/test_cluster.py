@@ -166,3 +166,80 @@ def test_cluster_handles_noise_points(project):
     ).fetchall()
     for n in noise:
         assert n["membership_probability"] == 0.0
+
+
+# --- Agglomerative clustering ---
+
+def _agglomerative_plan(n_clusters=3, linkage="ward"):
+    return Plan(clustering=[
+        ClusteringConfig(
+            method="agglomerative",
+            params={"n_clusters": n_clusters, "linkage": linkage},
+        )
+    ])
+
+
+def test_agglomerative_creates_run(project):
+    pdir, conn = project
+    _setup_clusterable(pdir, conn)
+
+    summary = cluster_items(conn, _agglomerative_plan())
+
+    assert summary["runs_created"] == 1
+    assert summary["skipped"] == 0
+
+    run = conn.execute("SELECT * FROM cluster_runs").fetchone()
+    assert run is not None
+    assert run["method"] == "agglomerative"
+
+
+def test_agglomerative_assigns_all_items(project):
+    pdir, conn = project
+    _setup_clusterable(pdir, conn)
+
+    cluster_items(conn, _agglomerative_plan())
+
+    assignments = conn.execute("SELECT * FROM cluster_assignments").fetchall()
+    assert len(assignments) == 30
+
+    for a in assignments:
+        assert isinstance(a["cluster_id"], int)
+        assert a["membership_probability"] == 1.0
+
+
+def test_agglomerative_no_noise(project):
+    pdir, conn = project
+    _setup_clusterable(pdir, conn)
+
+    cluster_items(conn, _agglomerative_plan())
+
+    noise = conn.execute(
+        "SELECT COUNT(*) FROM cluster_assignments WHERE cluster_id = -1"
+    ).fetchone()[0]
+    assert noise == 0
+
+
+def test_agglomerative_stores_params(project):
+    pdir, conn = project
+    _setup_clusterable(pdir, conn)
+
+    cluster_items(conn, _agglomerative_plan(n_clusters=4, linkage="complete"))
+
+    run = conn.execute("SELECT * FROM cluster_runs").fetchone()
+    params = json.loads(run["params_json"])
+    assert params["n_clusters"] == 4
+    assert params["linkage"] == "complete"
+
+
+def test_agglomerative_is_idempotent(project):
+    pdir, conn = project
+    _setup_clusterable(pdir, conn)
+
+    cluster_items(conn, _agglomerative_plan())
+
+    summary = cluster_items(conn, _agglomerative_plan())
+    assert summary["runs_created"] == 0
+    assert summary["skipped"] == 1
+
+    count = conn.execute("SELECT COUNT(*) FROM cluster_runs").fetchone()[0]
+    assert count == 1

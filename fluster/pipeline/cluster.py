@@ -1,10 +1,11 @@
-"""cluster_items — HDBSCAN clustering on reduction coordinates."""
+"""cluster_items — clustering on reduction coordinates (HDBSCAN or agglomerative)."""
 
 import json
 import sqlite3
 
 import hdbscan
 import numpy as np
+from sklearn.cluster import AgglomerativeClustering
 
 from fluster.config.plan import Plan
 
@@ -98,11 +99,17 @@ def cluster_items(
             skipped += 1
             continue
 
-        clusterer = hdbscan.HDBSCAN(**params)
-        clusterer.fit(coords)
-
-        labels = clusterer.labels_
-        probabilities = clusterer.probabilities_
+        if cluster_config.method == "hdbscan":
+            clusterer = hdbscan.HDBSCAN(**params)
+            clusterer.fit(coords)
+            labels = clusterer.labels_
+            probabilities = clusterer.probabilities_
+        elif cluster_config.method == "agglomerative":
+            clusterer = AgglomerativeClustering(**params)
+            labels = clusterer.fit_predict(coords)
+            probabilities = np.ones(len(labels), dtype=np.float64)
+        else:
+            raise ValueError(f"Unknown clustering method '{cluster_config.method}'")
 
         cursor = conn.execute(
             "INSERT INTO cluster_runs "

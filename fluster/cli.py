@@ -193,38 +193,64 @@ def plan_cmd():
 
         cluster = plan.clustering[0]
 
-        min_cluster = cluster.params.get("min_cluster_size", 5)
-        min_cluster = typer.prompt(
-            "HDBSCAN min_cluster_size", default=min_cluster, type=int,
-        )
-        cluster.params["min_cluster_size"] = min_cluster
-
-        min_samples = cluster.params.get("min_samples", min_cluster)
-        min_samples = typer.prompt(
-            "HDBSCAN min_samples", default=min_samples, type=int,
-        )
-        if min_samples < 1:
-            console.print("[red]min_samples must be >= 1.[/red]")
-            raise typer.Exit(code=1)
-        cluster.params["min_samples"] = min_samples
-
-        method = cluster.params.get("cluster_selection_method", "eom")
-        method = typer.prompt(
-            "HDBSCAN cluster_selection_method (eom/leaf)", default=method,
+        method_choice = typer.prompt(
+            "Clustering method (hdbscan/agglomerative)", default=cluster.method,
         ).strip().lower()
-        if method not in ("eom", "leaf"):
-            console.print(f"[red]Invalid method '{method}'. Must be 'eom' or 'leaf'.[/red]")
+        if method_choice not in ("hdbscan", "agglomerative"):
+            console.print(f"[red]Invalid method '{method_choice}'.[/red]")
             raise typer.Exit(code=1)
-        cluster.params["cluster_selection_method"] = method
+        if method_choice == "hdbscan":
+            min_cluster = cluster.params.get("min_cluster_size", 5)
+            min_cluster = typer.prompt(
+                "HDBSCAN min_cluster_size", default=min_cluster, type=int,
+            )
+            cluster.params["min_cluster_size"] = min_cluster
 
-        epsilon = cluster.params.get("cluster_selection_epsilon", 0.0)
-        epsilon = typer.prompt(
-            "HDBSCAN cluster_selection_epsilon", default=epsilon, type=float,
-        )
-        if epsilon < 0.0:
-            console.print("[red]cluster_selection_epsilon must be >= 0.0.[/red]")
-            raise typer.Exit(code=1)
-        cluster.params["cluster_selection_epsilon"] = epsilon
+            min_samples = cluster.params.get("min_samples", min_cluster)
+            min_samples = typer.prompt(
+                "HDBSCAN min_samples", default=min_samples, type=int,
+            )
+            if min_samples < 1:
+                console.print("[red]min_samples must be >= 1.[/red]")
+                raise typer.Exit(code=1)
+            cluster.params["min_samples"] = min_samples
+
+            csm = cluster.params.get("cluster_selection_method", "eom")
+            csm = typer.prompt(
+                "HDBSCAN cluster_selection_method (eom/leaf)", default=csm,
+            ).strip().lower()
+            if csm not in ("eom", "leaf"):
+                console.print(f"[red]Invalid method '{csm}'. Must be 'eom' or 'leaf'.[/red]")
+                raise typer.Exit(code=1)
+            cluster.params["cluster_selection_method"] = csm
+
+            epsilon = cluster.params.get("cluster_selection_epsilon", 0.0)
+            epsilon = typer.prompt(
+                "HDBSCAN cluster_selection_epsilon", default=epsilon, type=float,
+            )
+            if epsilon < 0.0:
+                console.print("[red]cluster_selection_epsilon must be >= 0.0.[/red]")
+                raise typer.Exit(code=1)
+            cluster.params["cluster_selection_epsilon"] = epsilon
+
+        elif method_choice == "agglomerative":
+            n_clusters = cluster.params.get("n_clusters", 8)
+            n_clusters = typer.prompt("Number of clusters", default=n_clusters, type=int)
+            if n_clusters < 2:
+                console.print("[red]n_clusters must be >= 2.[/red]")
+                raise typer.Exit(code=1)
+
+            linkage = cluster.params.get("linkage", "ward")
+            linkage = typer.prompt(
+                "Linkage (ward/complete/average/single)", default=linkage,
+            ).strip().lower()
+            if linkage not in ("ward", "complete", "average", "single"):
+                console.print(f"[red]Invalid linkage '{linkage}'.[/red]")
+                raise typer.Exit(code=1)
+
+            cluster.params = {"n_clusters": n_clusters, "linkage": linkage}
+
+        cluster.method = method_choice
 
         caption = plan.images.caption
         caption = typer.confirm("Caption images with FastVLM?", default=caption)
@@ -233,8 +259,8 @@ def plan_cmd():
         save_plan(plan, plan_path)
         console.print(f"\nPlan saved to {plan_path}")
         console.print(f"  LLM:        {plan.llm.provider.value} / {plan.llm.model}")
-        console.print(f"  Clustering:  min_cluster_size={min_cluster}, min_samples={min_samples}")
-        console.print(f"               cluster_selection_method={method}, cluster_selection_epsilon={epsilon}")
+        params_str = ", ".join(f"{k}={v}" for k, v in cluster.params.items())
+        console.print(f"  Clustering:  method={cluster.method}, {params_str}")
         console.print(f"  Images:      caption={'on' if caption else 'off'}")
 
 

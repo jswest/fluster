@@ -132,7 +132,6 @@ CREATE TABLE IF NOT EXISTS cluster_runs (
     params_json     TEXT NOT NULL DEFAULT '{}',
     created_at      TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (reduction_id) REFERENCES reductions (reduction_id),
-    CHECK (method IN ('hdbscan')),
     CHECK (json_valid(params_json))
 );
 
