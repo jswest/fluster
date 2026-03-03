@@ -14,4 +14,8 @@
 	input {
 		width: 100%;
 	}
+
+	input::placeholder {
+		font-size: 0.8rem;
+	}
 </style>
