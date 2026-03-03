@@ -15,7 +15,7 @@ def _is_image(mime_type: str | None) -> bool:
     return mime_type is not None and mime_type.startswith("image/")
 
 
-_IMAGE_TOKEN_INDEX = -200
+_FASTVLM_MODEL_ID = "KamilaMila/FastVLM-0.5B"
 
 
 def _load_caption_model():
@@ -25,7 +25,7 @@ def _load_caption_model():
         return _caption_cache
 
     import torch
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from transformers import AutoProcessor, FastVlmForConditionalGeneration
 
     logger.info("Loading FastVLM-0.5B caption model...")
 
@@ -38,22 +38,18 @@ def _load_caption_model():
 
     dtype = torch.float16 if device.type == "cuda" else torch.float32
 
-    model = AutoModelForCausalLM.from_pretrained(
-        "apple/FastVLM-0.5B",
-        torch_dtype=dtype,
-        trust_remote_code=True,
+    model = FastVlmForConditionalGeneration.from_pretrained(
+        _FASTVLM_MODEL_ID, torch_dtype=dtype,
     ).to(device)
     model.eval()
-    tokenizer = AutoTokenizer.from_pretrained(
-        "apple/FastVLM-0.5B", trust_remote_code=True,
-    )
+    processor = AutoProcessor.from_pretrained(_FASTVLM_MODEL_ID)
 
-    _caption_cache = (model, tokenizer, device)
+    _caption_cache = (model, processor, device)
     logger.info(f"FastVLM loaded on {device} ({dtype})")
     return _caption_cache
 
 
-def _caption_image(stored_path: str, project_dir: Path, model, tokenizer, device) -> str:
+def _caption_image(stored_path: str, project_dir: Path, model, processor, device) -> str:
     """Generate a text caption for an image using FastVLM."""
     import torch
     from PIL import Image
@@ -62,35 +58,31 @@ def _caption_image(stored_path: str, project_dir: Path, model, tokenizer, device
     try:
         img = Image.open(full_path).convert("RGB")
 
-        messages = [
-            {"role": "user", "content": "<image>\nDescribe this image in one sentence."},
+        conversation = [
+            {"role": "user", "content": [
+                {"type": "image"},
+                {"type": "text", "text": "Describe this image in one sentence."},
+            ]},
         ]
-        rendered = tokenizer.apply_chat_template(
-            messages, add_generation_prompt=True, tokenize=False,
+        prompt = processor.apply_chat_template(
+            conversation, add_generation_prompt=True,
         )
-        pre, post = rendered.split("<image>", 1)
-        pre_ids = tokenizer(pre, return_tensors="pt", add_special_tokens=False).input_ids
-        post_ids = tokenizer(post, return_tensors="pt", add_special_tokens=False).input_ids
-        img_tok = torch.tensor([[_IMAGE_TOKEN_INDEX]], dtype=pre_ids.dtype)
-        input_ids = torch.cat([pre_ids, img_tok, post_ids], dim=1).to(device)
-        attention_mask = torch.ones_like(input_ids, device=device)
-
-        px = model.get_vision_tower().image_processor(
-            images=img, return_tensors="pt",
-        )["pixel_values"].to(device, dtype=model.dtype)
+        inputs = processor(
+            images=img, text=prompt, return_tensors="pt",
+        ).to(device)
 
         with torch.no_grad():
             output = model.generate(
-                inputs=input_ids,
-                attention_mask=attention_mask,
-                images=px,
-                max_new_tokens=60,
-                eos_token_id=tokenizer.eos_token_id,
+                **inputs, max_new_tokens=60,
+                eos_token_id=processor.tokenizer.eos_token_id,
             )
-        # Only decode new tokens (skip the prompt)
-        new_tokens = output[0][input_ids.shape[1]:]
-        text = tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
-        return text
+
+        new_tokens = output[0][inputs["input_ids"].shape[1]:]
+        text = processor.batch_decode(
+            [new_tokens], skip_special_tokens=True,
+            clean_up_tokenization_spaces=False,
+        )[0]
+        return text.strip()
     except Exception as e:
         logger.warning(f"Failed to caption image {full_path}: {e}")
         return ""
@@ -174,8 +166,8 @@ def materialize_items(
         for artifact in artifacts:
             if _is_image(artifact["mime_type"]):
                 if caption_images:
-                    model, tokenizer, device = _load_caption_model()
-                    text = _caption_image(artifact["stored_path"], project_dir, model, tokenizer, device)
+                    model, processor, device = _load_caption_model()
+                    text = _caption_image(artifact["stored_path"], project_dir, model, processor, device)
                 else:
                     text = ""
             else:
