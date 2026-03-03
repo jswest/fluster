@@ -191,7 +191,7 @@
 
 <style>
 	.fullscreen {
-		height: calc(100vh - 2.75rem);
+		height: 100%;
 		display: flex;
 		overflow: hidden;
 	}

@@ -10,18 +10,18 @@
 	<title>{data.projectName} — fluster</title>
 </svelte:head>
 
-<nav>
-	<span class="project-name">{data.projectName}</span>
-	<a href="/jobs">Jobs</a>
-	<a href="/runs">Runs</a>
-	<span class="db-path muted">{data.dbPath}</span>
-</nav>
+<div class="app-shell">
+	<nav>
+		<span class="project-name">{data.projectName}</span>
+		<a href="/jobs">Jobs</a>
+		<a href="/runs">Runs</a>
+		<span class="db-path muted">{data.dbPath}</span>
+	</nav>
 
-{@render children()}
-
-<footer>
-	<span class="muted">fluster v1.0.0 — read-only</span>
-</footer>
+	<div class="content">
+		{@render children()}
+	</div>
+</div>
 
 <style>
 	nav {
@@ -53,11 +53,20 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		max-width: 20rem;
+		direction: rtl;
+		text-align: left;
 	}
 
-	footer {
-		padding: 0.5rem 1rem;
-		text-align: center;
-		font-size: 0.75rem;
+	.app-shell {
+		height: 100vh;
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
+	}
+
+	.content {
+		flex: 1;
+		overflow-y: auto;
+		min-height: 0;
 	}
 </style>
