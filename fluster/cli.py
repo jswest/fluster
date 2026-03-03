@@ -200,13 +200,17 @@ def plan_cmd():
             console.print(f"[red]Invalid method '{method_choice}'.[/red]")
             raise typer.Exit(code=1)
         if method_choice == "hdbscan":
-            min_cluster = cluster.params.get("min_cluster_size", 5)
+            # Clear any previously set agglomerative parameters (only clear old non-HDBSCAN params)
+            old_params = cluster.params
+            cluster.params = {}
+            
+            min_cluster = old_params.get("min_cluster_size", 5)
             min_cluster = typer.prompt(
                 "HDBSCAN min_cluster_size", default=min_cluster, type=int,
             )
             cluster.params["min_cluster_size"] = min_cluster
 
-            min_samples = cluster.params.get("min_samples", min_cluster)
+            min_samples = old_params.get("min_samples", min_cluster)
             min_samples = typer.prompt(
                 "HDBSCAN min_samples", default=min_samples, type=int,
             )
@@ -215,7 +219,7 @@ def plan_cmd():
                 raise typer.Exit(code=1)
             cluster.params["min_samples"] = min_samples
 
-            csm = cluster.params.get("cluster_selection_method", "eom")
+            csm = old_params.get("cluster_selection_method", "eom")
             csm = typer.prompt(
                 "HDBSCAN cluster_selection_method (eom/leaf)", default=csm,
             ).strip().lower()
@@ -224,7 +228,7 @@ def plan_cmd():
                 raise typer.Exit(code=1)
             cluster.params["cluster_selection_method"] = csm
 
-            epsilon = cluster.params.get("cluster_selection_epsilon", 0.0)
+            epsilon = old_params.get("cluster_selection_epsilon", 0.0)
             epsilon = typer.prompt(
                 "HDBSCAN cluster_selection_epsilon", default=epsilon, type=float,
             )
@@ -234,13 +238,17 @@ def plan_cmd():
             cluster.params["cluster_selection_epsilon"] = epsilon
 
         elif method_choice == "agglomerative":
-            n_clusters = cluster.params.get("n_clusters", 8)
+            # Clear any previously set hdbscan parameters (only clear old non-agglomerative params)
+            old_params = cluster.params
+            cluster.params = {}
+            
+            n_clusters = old_params.get("n_clusters", 8)
             n_clusters = typer.prompt("Number of clusters", default=n_clusters, type=int)
             if n_clusters < 2:
                 console.print("[red]n_clusters must be >= 2.[/red]")
                 raise typer.Exit(code=1)
 
-            linkage = cluster.params.get("linkage", "ward")
+            linkage = old_params.get("linkage", "ward")
             linkage = typer.prompt(
                 "Linkage (ward/complete/average/single)", default=linkage,
             ).strip().lower()

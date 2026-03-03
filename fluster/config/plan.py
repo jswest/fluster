@@ -32,10 +32,22 @@ class UMAPReduction(BaseModel):
 ReductionConfig = PCAReduction | UMAPReduction
 
 
+class HDBSCANParams(BaseModel):
+    min_cluster_size: int = 5
+    min_samples: int = None  # Will default to min_cluster_size
+    cluster_selection_method: str = "eom"
+    cluster_selection_epsilon: float = 0.0
+
+
+class AgglomerativeParams(BaseModel):
+    n_clusters: int = 8
+    linkage: str = "ward"
+
+
 class ClusteringConfig(BaseModel):
     method: Literal["hdbscan", "agglomerative"] = "hdbscan"
     reduction: str = "umap_8d"  # Format: "{method}_{dimensions}d"
-    params: dict = Field(default_factory=lambda: {"min_cluster_size": 5})
+    params: dict = Field(default_factory=dict)
 
 
 class ImageConfig(BaseModel):

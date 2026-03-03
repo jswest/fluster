@@ -100,12 +100,22 @@ def cluster_items(
             continue
 
         if cluster_config.method == "hdbscan":
-            clusterer = hdbscan.HDBSCAN(**params)
+            # Filter params to only include HDBSCAN-specific parameters
+            hdbscan_params = {
+                k: v for k, v in params.items() 
+                if k in ('min_cluster_size', 'min_samples', 'cluster_selection_method', 'cluster_selection_epsilon')
+            }
+            clusterer = hdbscan.HDBSCAN(**hdbscan_params)
             clusterer.fit(coords)
             labels = clusterer.labels_
             probabilities = clusterer.probabilities_
         elif cluster_config.method == "agglomerative":
-            clusterer = AgglomerativeClustering(**params)
+            # Filter params to only include AgglomerativeClustering-specific parameters
+            agglom_params = {
+                k: v for k, v in params.items() 
+                if k in ('n_clusters', 'linkage')
+            }
+            clusterer = AgglomerativeClustering(**agglom_params)
             labels = clusterer.fit_predict(coords)
             probabilities = np.ones(len(labels), dtype=np.float64)
         else:
