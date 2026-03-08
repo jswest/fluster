@@ -9,6 +9,7 @@
 - Generate embeddings
 - Reduce dimensions (PCA + UMAP)
 - Cluster (HDBSCAN or agglomerative)
+- Select representative exemplars per cluster
 - Label clusters with an LLM (BYO)
 - Critique the clustering run
 - Keep an auditable trail of every step
@@ -39,7 +40,7 @@ It is:
 
 ## Status
 
-v0 (CLI + pipeline) is complete. v1 (SvelteKit visualization) is in progress.
+v0 (CLI + pipeline) and v1 (SvelteKit visualization) are complete.
 
 ---
 
@@ -111,7 +112,7 @@ fluster plan
 # Ingest a CSV — file_path column is optional
 fluster ingest-rows data.csv
 
-# Run the full pipeline (materialize → embed → reduce → cluster → label → critique)
+# Run the full pipeline (materialize → embed → reduce → cluster → exemplars → label → critique)
 fluster run
 
 # Check on jobs and logs
@@ -195,8 +196,7 @@ fluster/
 ├── db/                 # SQLite connection + schema
 ├── jobs/               # Job lifecycle management
 ├── llm/                # LLM interface (OpenAI, Ollama)
-├── pipeline/           # The pipeline stages (ingest → critique)
-└── util/               # Shared utilities
+└── pipeline/           # The pipeline stages (ingest → critique)
 ```
 
 ### Starting the dev server
