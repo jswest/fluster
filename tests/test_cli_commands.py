@@ -128,6 +128,30 @@ def test_cancel_finished_job(named_project):
     assert row["cancel_requested_at"] is None  # Should NOT be set on finished job.
 
 
+# --- fluster reset ---
+
+
+def test_reset_drops_and_clears_derived_tables(named_project):
+    pdir = project_dir(named_project)
+    conn = connect(pdir)
+    conn.execute(
+        "INSERT INTO reductions (embedding_reference, method, target_dimensions) "
+        "VALUES ('emb', 'pca', 2)"
+    )
+    conn.commit()
+    conn.close()
+
+    # DROP + recreate must not error under foreign_keys=ON (correct child-first order).
+    result = runner.invoke(app, ["reset"])
+    assert result.exit_code == 0
+
+    conn = connect(pdir)
+    # The probe row is gone and the derived tables are queryable again (recreated).
+    assert conn.execute("SELECT COUNT(*) FROM reductions").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM cluster_exemplars").fetchone()[0] == 0
+    conn.close()
+
+
 # --- fluster delete ---
 
 

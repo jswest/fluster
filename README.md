@@ -9,7 +9,7 @@
 - Generate embeddings
 - Reduce dimensions (PCA + UMAP)
 - Cluster (HDBSCAN or agglomerative)
-- Select representative exemplars per cluster
+- Select exemplars from each cluster's core and outskirts
 - Label clusters with an LLM (BYO)
 - Critique the clustering run
 - Keep an auditable trail of every step
