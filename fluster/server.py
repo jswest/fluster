@@ -8,9 +8,12 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from fluster import __version__
+from fluster.config import settings
+from fluster.config.plan import load_plan
 from fluster.config.project import project_dir, project_exists
 from fluster.db.connection import connect
 from fluster.jobs.manager import create_job, get_active_job, get_job, request_cancel
+from fluster.pipeline.merge import merge_clusters
 
 # ---------------------------------------------------------------------------
 # Pydantic models
@@ -81,6 +84,14 @@ class ClusterRunDetail(BaseModel):
     assignments: list[ClusterAssignment]
     labels: list[ClusterSummary]
     critique: dict | None = None
+
+
+class MergeResponse(BaseModel):
+    cluster_run_id: int | None  # the merged run (existing or new); None if nothing merged
+    parent_cluster_run_id: int
+    merges: list[dict] = Field(default_factory=list)
+    skipped: bool
+    reason: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -262,6 +273,27 @@ def get_cluster_run(
         assignments=assignments,
         labels=labels,
         critique=critique,
+    )
+
+
+@router.post("/cluster-runs/{cluster_run_id}/merge")
+def merge_cluster_run(
+    cluster_run_id: int,
+    request: Request,
+    conn: sqlite3.Connection = Depends(get_conn),
+) -> MergeResponse:
+    plan = load_plan(request.app.state.project_dir / settings.PLAN_YAML)
+    try:
+        summary = merge_clusters(conn, cluster_run_id, plan.llm)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    return MergeResponse(
+        cluster_run_id=summary.get("cluster_run_id"),
+        parent_cluster_run_id=cluster_run_id,
+        merges=summary.get("merges", []),
+        skipped=summary["skipped"],
+        reason=summary.get("reason"),
     )
 
 
