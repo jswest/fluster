@@ -8,8 +8,11 @@
 		clusterId: number;
 		recordName: string;
 		embeddingText: string;
+		metadata: Record<string, unknown>;
 		imageArtifactId: string | null;
 	};
+
+	type MetaFilter = { key: string; value: string };
 
 	interface Props {
 		points: Point[];
@@ -52,7 +55,34 @@
 	let searchInput = $state('');
 	let searchQuery = $state('');
 	let filterMode: 'fade' | 'hide' = $state('fade');
+	let metaFilters = $state<MetaFilter[]>([]);
 	let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+
+	// --- Metadata field options (derived from the points' metadata) ---
+	const metaKeys = $derived.by(() => {
+		const keys = new Set<string>();
+		for (const p of points) {
+			for (const k of Object.keys(p.metadata)) keys.add(k);
+		}
+		return [...keys].sort();
+	});
+
+	function valuesForKey(key: string): string[] {
+		const values = new Set<string>();
+		for (const p of points) {
+			const v = p.metadata[key];
+			if (v != null && v !== '') values.add(String(v));
+		}
+		return [...values].sort();
+	}
+
+	function addMetaFilter() {
+		metaFilters = [...metaFilters, { key: metaKeys[0], value: '' }];
+	}
+
+	function removeMetaFilter(index: number) {
+		metaFilters = metaFilters.filter((_, i) => i !== index);
+	}
 
 	$effect(() => {
 		clearTimeout(debounceTimer);
@@ -78,15 +108,22 @@
 		return { minX: minX - dx * 0.05, maxX: maxX + dx * 0.05, minY: minY - dy * 0.05, maxY: maxY + dy * 0.05 };
 	});
 
-	// --- Search matching ---
+	// --- Search matching (text tokens AND active metadata filters) ---
 	const matchSet = $derived.by(() => {
 		const q = searchQuery.trim().toLowerCase();
-		if (!q) return null;
-		const tokens = q.split(/\s+/);
+		const tokens = q ? q.split(/\s+/) : [];
+		const activeFilters = metaFilters
+			.filter((f) => f.key && f.value.trim())
+			.map((f) => ({ key: f.key, value: f.value.trim().toLowerCase() }));
+		if (tokens.length === 0 && activeFilters.length === 0) return null;
 		const matched = new Set<number>();
 		for (const p of points) {
 			const haystack = (p.recordName + ' ' + p.embeddingText).toLowerCase();
-			if (tokens.every((t) => haystack.includes(t))) {
+			const textMatch = tokens.every((t) => haystack.includes(t));
+			const metaMatch = activeFilters.every((f) =>
+				String(p.metadata[f.key] ?? '').toLowerCase().includes(f.value)
+			);
+			if (textMatch && metaMatch) {
 				matched.add(p.itemId);
 			}
 		}
@@ -304,24 +341,54 @@
 
 <div class="scatter-container">
 	<div class="controls">
-		<div class="search-wrap">
-			<Input placeholder="Search points..." bind:value={searchInput} />
+		<div class="controls-row">
+			<div class="search-wrap">
+				<Input placeholder="Search points..." bind:value={searchInput} />
+			</div>
+			<span class="muted match-count">{matchCount} / {points.length}</span>
+			<button
+				class="mode-btn"
+				class:active={filterMode === 'fade'}
+				onclick={() => filterMode = 'fade'}
+			>Fade</button>
+			<button
+				class="mode-btn"
+				class:active={filterMode === 'hide'}
+				onclick={() => filterMode = 'hide'}
+			>Hide</button>
+			<button
+				class="mode-btn"
+				onclick={() => { zoom = 1; panX = 0; panY = 0; }}
+			>Reset view</button>
 		</div>
-		<span class="muted match-count">{matchCount} / {points.length}</span>
-		<button
-			class="mode-btn"
-			class:active={filterMode === 'fade'}
-			onclick={() => filterMode = 'fade'}
-		>Fade</button>
-		<button
-			class="mode-btn"
-			class:active={filterMode === 'hide'}
-			onclick={() => filterMode = 'hide'}
-		>Hide</button>
-		<button
-			class="mode-btn"
-			onclick={() => { zoom = 1; panX = 0; panY = 0; }}
-		>Reset view</button>
+
+		{#if metaKeys.length > 0}
+			<div class="meta-filters">
+				{#each metaFilters as filter, i (i)}
+					<div class="meta-filter-row">
+						<select class="meta-select" bind:value={filter.key}>
+							{#each metaKeys as key}
+								<option value={key}>{key}</option>
+							{/each}
+						</select>
+						<span class="muted">is</span>
+						<input
+							class="meta-value"
+							list="meta-values-{i}"
+							placeholder="value"
+							bind:value={filter.value}
+						/>
+						<datalist id="meta-values-{i}">
+							{#each valuesForKey(filter.key) as value}
+								<option {value}></option>
+							{/each}
+						</datalist>
+						<button class="meta-remove" aria-label="Remove filter" onclick={() => removeMetaFilter(i)}>✕</button>
+					</div>
+				{/each}
+				<button class="meta-add" onclick={addMetaFilter}>+ Metadata filter</button>
+			</div>
+		{/if}
 	</div>
 
 	<div class="canvas-wrap" bind:this={container}>
@@ -369,13 +436,60 @@
 		top: 0.5rem;
 		right: 0.5rem;
 		display: flex;
-		align-items: center;
+		flex-direction: column;
+		align-items: flex-end;
 		gap: 0.5rem;
 		z-index: 5;
 	}
 
+	.controls-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
 	.search-wrap {
 		width: 14rem;
+	}
+
+	.meta-filters {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 0.375rem;
+	}
+
+	.meta-filter-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 0.8125rem;
+	}
+
+	.meta-select {
+		font-family: inherit;
+		font-size: 0.8125rem;
+		border: 1px solid var(--color-fg);
+		border-radius: 0;
+		padding: 0.25rem;
+		background: var(--color-bg);
+		color: var(--color-fg);
+	}
+
+	.meta-value {
+		width: 10rem;
+		font-size: 0.8125rem;
+	}
+
+	.meta-remove {
+		padding: 0.25rem 0.5rem;
+		font-size: 0.8125rem;
+		line-height: 1;
+	}
+
+	.meta-add {
+		padding: 0.25rem 0.75rem;
+		font-size: 0.8125rem;
 	}
 
 	.match-count {

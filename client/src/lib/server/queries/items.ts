@@ -50,6 +50,7 @@ export function getScatterPlotData(clusterRunId: number) {
 		.select({
 			itemId: items.itemId,
 			recordName: rows.rowName,
+			rowMetadataJson: rows.rowMetadataJson,
 			embeddingText: representations.text,
 			coordinatesJson: reductionCoordinates.coordinatesJson,
 			clusterId: clusterAssignments.clusterId
@@ -83,6 +84,10 @@ export function getScatterPlotData(clusterRunId: number) {
 
 	return rawRows.map((r) => {
 		const coords = JSON.parse(r.coordinatesJson) as number[];
+		let metadata: Record<string, unknown> = {};
+		try {
+			metadata = JSON.parse(r.rowMetadataJson);
+		} catch {}
 		return {
 			itemId: r.itemId,
 			x: coords[0],
@@ -90,6 +95,7 @@ export function getScatterPlotData(clusterRunId: number) {
 			clusterId: r.clusterId,
 			recordName: r.recordName ?? '',
 			embeddingText: r.embeddingText,
+			metadata,
 			imageArtifactId: imageMap.get(r.itemId) ?? null
 		};
 	});
