@@ -5,6 +5,7 @@
 	import Input from '$lib/components/Input.svelte';
 	import ScatterPlot from '$lib/components/ScatterPlot.svelte';
 	import ItemDrawer from '$lib/components/ItemDrawer.svelte';
+	import ClusterDrawer from '$lib/components/ClusterDrawer.svelte';
 	import { createClusterColorScale } from '$lib/cluster-colors';
 	import { formatTime, formatPercent } from '$lib/format';
 
@@ -48,6 +49,10 @@
 	const parsedParams: Record<string, unknown> = $derived.by(() => {
 		try { return JSON.parse(data.run.paramsJson); } catch { return {}; }
 	});
+
+	const focusedCluster = $derived(
+		focusClusterId == null ? null : (data.clusters.find((c) => c.clusterId === focusClusterId) ?? null)
+	);
 
 	const inspectedCluster = $derived.by(() => {
 		if (inspectItemId == null) return null;
@@ -146,6 +151,8 @@
 
 		{#if inspectItemId != null}
 			<ItemDrawer itemId={inspectItemId} clusterId={inspectedCluster?.clusterId} clusterLabel={inspectedCluster?.label} onClose={() => inspectItemId = null} />
+		{:else if focusedCluster}
+			<ClusterDrawer cluster={focusedCluster} color={getClusterColor(focusedCluster.clusterId)} onClose={() => focusClusterId = null} />
 		{/if}
 
 		{#if showCritique && data.critique}

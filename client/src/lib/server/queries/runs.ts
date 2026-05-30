@@ -64,11 +64,38 @@ export function getClusterDetails(clusterRunId: number) {
 		.orderBy(clusterSummaries.clusterId)
 		.all();
 
-	return labels.map((l) => ({
-		clusterId: l.clusterId,
-		label: l.label,
-		size: sizeMap.get(l.clusterId) ?? 0
-	}));
+	return labels.map((l) => {
+		const detail = parseLabelJson(l.labelJson);
+		return {
+			clusterId: l.clusterId,
+			label: l.label,
+			size: sizeMap.get(l.clusterId) ?? 0,
+			shortLabel: detail.short_label,
+			rationale: detail.rationale,
+			keywords: detail.keywords,
+			provider: l.provider,
+			model: l.model
+		};
+	});
+}
+
+type LabelJson = {
+	short_label: string;
+	rationale: string;
+	keywords: string[];
+};
+
+function parseLabelJson(labelJson: string): LabelJson {
+	try {
+		const parsed = JSON.parse(labelJson) as Partial<LabelJson>;
+		return {
+			short_label: parsed.short_label ?? '',
+			rationale: parsed.rationale ?? '',
+			keywords: Array.isArray(parsed.keywords) ? parsed.keywords : []
+		};
+	} catch {
+		return { short_label: '', rationale: '', keywords: [] };
+	}
 }
 
 export type CritiqueData = {
