@@ -6,7 +6,7 @@ from fluster.config.plan import Plan
 from fluster.db.connection import connect
 from fluster.pipeline.cluster import cluster_items
 from fluster.pipeline.embed import embed_items
-from fluster.pipeline.exemplars import select_exemplars
+from fluster.pipeline.exemplars import _select_for_cluster, select_exemplars
 from fluster.pipeline.ingest import ingest_rows
 from fluster.pipeline.materialize import materialize_items
 from fluster.pipeline.reduce import reduce_items
@@ -65,16 +65,16 @@ def test_exemplars_have_valid_ranks(project):
 
     exemplars = conn.execute(
         "SELECT * FROM cluster_exemplars WHERE cluster_run_id = ? "
-        "ORDER BY cluster_id, rank",
+        "ORDER BY cluster_id, kind, rank",
         (run_id,),
     ).fetchall()
 
-    # Ranks should start at 1 and be sequential per cluster.
-    by_cluster: dict[int, list] = {}
+    # Ranks should start at 1 and be sequential per (cluster, kind) group.
+    by_group: dict[tuple[int, str], list] = {}
     for e in exemplars:
-        by_cluster.setdefault(e["cluster_id"], []).append(e)
+        by_group.setdefault((e["cluster_id"], e["kind"]), []).append(e)
 
-    for cluster_id, entries in by_cluster.items():
+    for (cluster_id, kind), entries in by_group.items():
         ranks = [e["rank"] for e in entries]
         assert ranks == list(range(1, len(ranks) + 1))
 
@@ -120,17 +120,19 @@ def test_exemplars_respect_top_k(project):
     pdir, conn = project
     run_id = _setup_clustered(pdir, conn)
 
-    select_exemplars(conn, run_id, top_k=2)
+    select_exemplars(conn, run_id, top_k=2, outskirts_k=1)
 
-    by_cluster = {}
+    by_cluster: dict[int, dict[str, int]] = {}
     for e in conn.execute(
         "SELECT * FROM cluster_exemplars WHERE cluster_run_id = ?",
         (run_id,),
     ).fetchall():
-        by_cluster.setdefault(e["cluster_id"], []).append(e)
+        counts = by_cluster.setdefault(e["cluster_id"], {})
+        counts[e["kind"]] = counts.get(e["kind"], 0) + 1
 
-    for cluster_id, entries in by_cluster.items():
-        assert len(entries) <= 2
+    for cluster_id, counts in by_cluster.items():
+        assert counts.get("center", 0) <= 2
+        assert counts.get("outskirt", 0) <= 1
 
 
 # --- Idempotency ---
@@ -175,20 +177,73 @@ def test_exemplars_exclude_noise(project):
 # --- Scores are ordered ---
 
 def test_exemplars_ranked_by_score(project):
-    """Within each cluster, rank 1 should have the highest score."""
+    """Center exemplars rank by descending score (most typical first); outskirt
+    exemplars rank by ascending centroid similarity (most peripheral first)."""
     pdir, conn = project
     run_id = _setup_clustered(pdir, conn)
 
     select_exemplars(conn, run_id)
 
-    by_cluster = {}
+    by_group: dict[tuple[int, str], list] = {}
     for e in conn.execute(
         "SELECT * FROM cluster_exemplars WHERE cluster_run_id = ? "
-        "ORDER BY cluster_id, rank",
+        "ORDER BY cluster_id, kind, rank",
         (run_id,),
     ).fetchall():
-        by_cluster.setdefault(e["cluster_id"], []).append(e)
+        by_group.setdefault((e["cluster_id"], e["kind"]), []).append(e)
 
-    for cluster_id, entries in by_cluster.items():
+    for (cluster_id, kind), entries in by_group.items():
         scores = [e["score"] for e in entries]
-        assert scores == sorted(scores, reverse=True)
+        if kind == "center":
+            assert scores == sorted(scores, reverse=True)
+        else:
+            assert scores == sorted(scores)
+
+
+# --- Center / outskirt split ---
+
+def test_exemplars_have_both_kinds(project):
+    """A run over varied data should yield both center and outskirt exemplars,
+    and the two sets should be disjoint."""
+    pdir, conn = project
+    run_id = _setup_clustered(pdir, conn)
+
+    select_exemplars(conn, run_id)
+
+    rows = conn.execute(
+        "SELECT item_id, kind FROM cluster_exemplars WHERE cluster_run_id = ?",
+        (run_id,),
+    ).fetchall()
+    kinds = {r["kind"] for r in rows}
+    assert kinds == {"center", "outskirt"}
+
+    centers = {r["item_id"] for r in rows if r["kind"] == "center"}
+    outskirts = {r["item_id"] for r in rows if r["kind"] == "outskirt"}
+    assert centers.isdisjoint(outskirts)
+
+
+def test_select_for_cluster_separates_core_from_edges():
+    """With a tight core and a few far-flung members, center exemplars come from
+    the core and outskirt exemplars from the edges."""
+    import numpy as np
+
+    # Five near-identical core members around [1, 0], two distant edge members.
+    vectors = {
+        1: np.array([1.0, 0.0], dtype=np.float32),
+        2: np.array([0.99, 0.01], dtype=np.float32),
+        3: np.array([0.98, 0.02], dtype=np.float32),
+        4: np.array([1.0, 0.03], dtype=np.float32),
+        5: np.array([0.97, 0.0], dtype=np.float32),
+        6: np.array([-1.0, 1.0], dtype=np.float32),
+        7: np.array([-0.8, 1.2], dtype=np.float32),
+    }
+    member_ids = list(vectors.keys())
+
+    selected = _select_for_cluster(member_ids, vectors, n_candidates=20, top_k=3, outskirts_k=2)
+
+    center_ids = {item_id for item_id, kind, _, _ in selected if kind == "center"}
+    outskirt_ids = {item_id for item_id, kind, _, _ in selected if kind == "outskirt"}
+
+    assert outskirt_ids == {6, 7}
+    assert center_ids <= {1, 2, 3, 4, 5}
+    assert center_ids.isdisjoint(outskirt_ids)

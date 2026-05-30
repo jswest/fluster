@@ -166,6 +166,7 @@ CREATE TABLE IF NOT EXISTS cluster_exemplars (
     cluster_run_id  INTEGER NOT NULL,
     cluster_id      INTEGER NOT NULL,
     item_id         INTEGER NOT NULL,
+    kind            TEXT NOT NULL,
     rank            INTEGER NOT NULL,
     score           REAL NOT NULL,
     PRIMARY KEY (cluster_run_id, cluster_id, item_id),

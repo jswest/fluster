@@ -24,6 +24,7 @@ from fluster.config.project import (
     set_active_project,
 )
 from fluster.db.connection import connect
+from fluster.db.schema import apply_schema
 from fluster.jobs.manager import (
     create_job,
     fail_job,
@@ -39,6 +40,7 @@ from fluster.jobs.manager import (
 )
 from fluster.pipeline.export import export_cluster_run
 from fluster.pipeline.ingest import ingest_rows
+from fluster.pipeline.merge import merge_clusters
 from fluster.pipeline.run import PipelineCancelled, run_pipeline
 
 console = Console()
@@ -467,6 +469,8 @@ def cancel(
 def reset():
     """Clear pipeline outputs (embeddings, clusters, etc.) so the next run starts fresh."""
     with _open_project() as (project_path, conn):
+        # Listed child-first so each table's rows are gone before its parent is
+        # dropped (DROP does an implicit DELETE under foreign_keys=ON).
         tables = [
             "cluster_run_critiques",
             "cluster_summaries",
@@ -479,8 +483,13 @@ def reset():
             "embeddings",
             "representations",
         ]
+        # DROP rather than DELETE so schema changes to these derived tables are
+        # picked up: apply_schema recreates them with the current DDL. (The
+        # vec_embeddings virtual table is recreated by embed, not apply_schema.)
         for table in tables:
-            conn.execute(f"DELETE FROM {table}")
+            conn.execute(f"DROP TABLE IF EXISTS {table}")
+        conn.commit()
+        apply_schema(conn)
         conn.commit()
         typer.echo("Pipeline outputs cleared. Run 'fluster run' to re-process.")
 
@@ -546,6 +555,41 @@ def export(
         except ValueError as exc:
             logger.error(str(exc))
             raise typer.Exit(code=1)
+
+
+@app.command()
+def merge(
+    cluster_run: int = typer.Option(..., "--cluster-run", help="Source cluster run ID to merge."),
+    force: bool = typer.Option(
+        False, "--force", help="Create a new merged run even if one already exists.",
+    ),
+):
+    """Auto-merge a labeled cluster run's redundant clusters into a new run."""
+    with _open_project() as (project_path, conn):
+        plan = load_plan(project_path / settings.PLAN_YAML)
+        try:
+            summary = merge_clusters(conn, cluster_run, plan.llm, force=force)
+        except ValueError as exc:
+            logger.error(str(exc))
+            raise typer.Exit(code=1)
+
+        if summary["skipped"]:
+            if "cluster_run_id" in summary:
+                console.print(
+                    f"Cluster run {cluster_run} already has merged run "
+                    f"{summary['cluster_run_id']}. Use --force to create another."
+                )
+            else:
+                console.print(f"No clusters were merged ({summary.get('reason', 'nothing to do')}).")
+            return
+
+        console.print(
+            f"Created merged cluster run [bold]{summary['cluster_run_id']}[/bold] "
+            f"({summary['n_clusters_before']} → {summary['n_clusters_after']} clusters)."
+        )
+        for group in summary["merges"]:
+            sources = ", ".join(str(cid) for cid in group["source_cluster_ids"])
+            console.print(f"  merged [{sources}] → cluster {group['new_cluster_id']}: {group['rationale']}")
 
 
 @app.command()

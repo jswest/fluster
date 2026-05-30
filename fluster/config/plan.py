@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from fluster.config.settings import SEED
 
@@ -71,6 +71,14 @@ class ClusteringConfig(BaseModel):
     # "codebook" clusters a SOM's node weights (two-level SOM) and propagates
     # each node's cluster to the items whose best-matching unit it is.
     target: Literal["coordinates", "codebook"] = "coordinates"
+
+    @model_validator(mode="after")
+    def _apply_method_defaults(self) -> ClusteringConfig:
+        # Fill the HDBSCAN default only when no params are given, keeping the
+        # default scoped to its method so params never leak across methods.
+        if not self.params and self.method == "hdbscan":
+            self.params = {"min_cluster_size": 5}
+        return self
 
 
 class ImageConfig(BaseModel):
