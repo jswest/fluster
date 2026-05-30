@@ -39,6 +39,7 @@ from fluster.jobs.manager import (
 )
 from fluster.pipeline.export import export_cluster_run
 from fluster.pipeline.ingest import ingest_rows
+from fluster.pipeline.merge import merge_clusters
 from fluster.pipeline.run import PipelineCancelled, run_pipeline
 
 console = Console()
@@ -546,6 +547,41 @@ def export(
         except ValueError as exc:
             logger.error(str(exc))
             raise typer.Exit(code=1)
+
+
+@app.command()
+def merge(
+    cluster_run: int = typer.Option(..., "--cluster-run", help="Source cluster run ID to merge."),
+    force: bool = typer.Option(
+        False, "--force", help="Create a new merged run even if one already exists.",
+    ),
+):
+    """Auto-merge a labeled cluster run's redundant clusters into a new run."""
+    with _open_project() as (project_path, conn):
+        plan = load_plan(project_path / settings.PLAN_YAML)
+        try:
+            summary = merge_clusters(conn, cluster_run, plan.llm, force=force)
+        except ValueError as exc:
+            logger.error(str(exc))
+            raise typer.Exit(code=1)
+
+        if summary["skipped"]:
+            if "cluster_run_id" in summary:
+                console.print(
+                    f"Cluster run {cluster_run} already has merged run "
+                    f"{summary['cluster_run_id']}. Use --force to create another."
+                )
+            else:
+                console.print(f"No clusters were merged ({summary.get('reason', 'nothing to do')}).")
+            return
+
+        console.print(
+            f"Created merged cluster run [bold]{summary['cluster_run_id']}[/bold] "
+            f"({summary['n_clusters_before']} → {summary['n_clusters_after']} clusters)."
+        )
+        for group in summary["merges"]:
+            sources = ", ".join(str(cid) for cid in group["source_cluster_ids"])
+            console.print(f"  merged [{sources}] → cluster {group['new_cluster_id']}: {group['rationale']}")
 
 
 @app.command()

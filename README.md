@@ -120,6 +120,10 @@ fluster jobs
 fluster job 1
 fluster logs
 
+# Over-segmented? Let an LLM fold redundant clusters into a new derived run
+# (non-destructive — the source run is left untouched). --force to redo.
+fluster merge --cluster-run 1
+
 # Export results
 fluster export --cluster-run 1 -o results.csv
 
