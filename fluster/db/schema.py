@@ -108,7 +108,7 @@ CREATE TABLE IF NOT EXISTS reductions (
     target_dimensions   INTEGER NOT NULL,
     params_json         TEXT NOT NULL DEFAULT '{}',
     created_at          TEXT NOT NULL DEFAULT (datetime('now')),
-    CHECK (method IN ('pca', 'umap')),
+    CHECK (method IN ('pca', 'umap', 'som')),
     CHECK (json_valid(params_json))
 );
 
@@ -120,6 +120,20 @@ CREATE TABLE IF NOT EXISTS reduction_coordinates (
     FOREIGN KEY (reduction_id) REFERENCES reductions (reduction_id),
     FOREIGN KEY (item_id)      REFERENCES items (item_id),
     CHECK (json_valid(coordinates_json))
+);
+
+-- One row per SOM grid node: its codebook weight vector (in the SOM's input
+-- space) and U-matrix distance. Written alongside a method='som' reduction.
+CREATE TABLE IF NOT EXISTS som_nodes (
+    reduction_id    INTEGER NOT NULL,
+    node_index      INTEGER NOT NULL,
+    grid_i          INTEGER NOT NULL,
+    grid_j          INTEGER NOT NULL,
+    weight_json     TEXT NOT NULL,
+    umatrix_dist    REAL NOT NULL,
+    PRIMARY KEY (reduction_id, node_index),
+    FOREIGN KEY (reduction_id) REFERENCES reductions (reduction_id),
+    CHECK (json_valid(weight_json))
 );
 """
 

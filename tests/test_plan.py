@@ -11,6 +11,7 @@ from fluster.config.plan import (
     LLMProvider,
     PCAReduction,
     Plan,
+    SOMReduction,
     UMAPReduction,
     load_plan,
     save_plan,
@@ -113,6 +114,46 @@ def test_load_custom_reductions(tmp_path):
     assert len(plan.reductions) == 1
     assert isinstance(plan.reductions[0], UMAPReduction)
     assert plan.reductions[0].target_dimensions == 3
+
+
+def test_som_not_in_default_plan():
+    """SOM is opt-in — it must not be in the default reductions."""
+    plan = Plan()
+    assert not any(isinstance(r, SOMReduction) for r in plan.reductions)
+
+
+def test_som_reduction_defaults():
+    som = SOMReduction()
+    assert som.method == "som"
+    assert som.target_dimensions == 2
+    assert som.grid_x is None and som.grid_y is None
+    assert som.num_iteration == 1000
+    assert som.random_state == 42
+
+
+def test_load_som_reduction(tmp_path):
+    """A SOM entry in plan.yaml parses to a SOMReduction (union discrimination)."""
+    path = tmp_path / "plan.yaml"
+    path.write_text(yaml.dump({
+        "reductions": [
+            {"method": "pca", "target_dimensions": 50},
+            {"method": "som", "grid_x": 8, "grid_y": 8, "num_iteration": 500},
+        ]
+    }))
+
+    plan = load_plan(path)
+    assert isinstance(plan.reductions[0], PCAReduction)
+    som = plan.reductions[1]
+    assert isinstance(som, SOMReduction)
+    assert som.grid_x == 8 and som.grid_y == 8
+    assert som.num_iteration == 500
+
+
+def test_som_roundtrip(tmp_path):
+    plan = Plan(reductions=[PCAReduction(), SOMReduction(grid_x=10, grid_y=10)])
+    path = tmp_path / "plan.yaml"
+    save_plan(plan, path)
+    assert load_plan(path) == plan
 
 
 def test_load_invalid_reduction_method(tmp_path):

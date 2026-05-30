@@ -31,8 +31,23 @@ class UMAPReduction(BaseModel):
     min_dist: float = 0.1
 
 
+class SOMReduction(BaseModel):
+    """Self-organizing map. Always a 2D grid; produces grid coordinates per item
+    plus a codebook (stored in `som_nodes`). grid_x/grid_y default to an auto
+    size (~5*sqrt(n) total nodes, squarish) resolved at reduction time."""
+
+    method: Literal["som"] = "som"
+    target_dimensions: Literal[2] = 2
+    grid_x: int | None = None
+    grid_y: int | None = None
+    sigma: float = 1.0
+    learning_rate: float = 0.5
+    num_iteration: int = 1000
+    random_state: int = SEED
+
+
 ReductionConfig = Annotated[
-    PCAReduction | UMAPReduction, Field(discriminator="method")
+    PCAReduction | UMAPReduction | SOMReduction, Field(discriminator="method")
 ]
 
 

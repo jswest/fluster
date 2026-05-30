@@ -13,6 +13,7 @@ dependencies = [
     "sqlite-vec>=0.1.6",
     "hdbscan>=0.8.40",
     "umap-learn>=0.5",
+    "minisom>=2.3",
     "rich>=13.9",
     "sentence-transformers>=3.3",
     "openai>=1.59",
