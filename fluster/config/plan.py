@@ -67,6 +67,10 @@ class ClusteringConfig(BaseModel):
     method: Literal["hdbscan", "agglomerative"] = "hdbscan"
     reduction: str = "umap_8d"  # Format: "{method}_{dimensions}d"
     params: dict = Field(default_factory=dict)
+    # "coordinates" clusters each item's reduction coordinates directly.
+    # "codebook" clusters a SOM's node weights (two-level SOM) and propagates
+    # each node's cluster to the items whose best-matching unit it is.
+    target: Literal["coordinates", "codebook"] = "coordinates"
 
 
 class ImageConfig(BaseModel):

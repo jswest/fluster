@@ -174,6 +174,29 @@ def test_custom_clustering_params():
     assert config.params["min_samples"] == 3
 
 
+def test_clustering_target_defaults_to_coordinates():
+    assert ClusteringConfig().target == "coordinates"
+
+
+def test_clustering_codebook_target_roundtrips(tmp_path):
+    plan = Plan(clustering=[
+        ClusteringConfig(
+            method="agglomerative", reduction="som_2d",
+            target="codebook", params={"n_clusters": 5},
+        )
+    ])
+    path = tmp_path / "plan.yaml"
+    save_plan(plan, path)
+    loaded = load_plan(path)
+    assert loaded.clustering[0].target == "codebook"
+    assert loaded == plan
+
+
+def test_invalid_clustering_target():
+    with pytest.raises(ValidationError):
+        ClusteringConfig(target="nonsense")
+
+
 # --- UMAP options (issue #8) ---
 
 
