@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from fluster.config.settings import SEED
 
@@ -52,6 +52,14 @@ class ClusteringConfig(BaseModel):
     method: Literal["hdbscan", "agglomerative"] = "hdbscan"
     reduction: str = "umap_8d"  # Format: "{method}_{dimensions}d"
     params: dict = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _apply_method_defaults(self) -> ClusteringConfig:
+        # Fill the HDBSCAN default only when no params are given, keeping the
+        # default scoped to its method so params never leak across methods.
+        if not self.params and self.method == "hdbscan":
+            self.params = {"min_cluster_size": 5}
+        return self
 
 
 class ImageConfig(BaseModel):
