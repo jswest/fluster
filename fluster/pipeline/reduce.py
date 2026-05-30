@@ -1,15 +1,17 @@
-"""reduce_items — dimensionality reduction via PCA and/or UMAP."""
+"""reduce_items — dimensionality reduction via PCA, UMAP, and/or SOM."""
 
 import json
+import math
 import sqlite3
 import struct
 import warnings
 
 import numpy as np
+from minisom import MiniSom
 from sklearn.decomposition import PCA
 from umap import UMAP
 
-from fluster.config.plan import PCAReduction, Plan, UMAPReduction
+from fluster.config.plan import PCAReduction, Plan, SOMReduction, UMAPReduction
 from fluster.config.settings import SEED
 
 
@@ -91,6 +93,59 @@ def _store_reduction(
     return reduction_id
 
 
+def _assert_som_supported(conn: sqlite3.Connection) -> None:
+    """Fail fast (and clearly) on pre-SOM project databases.
+
+    SOM support widened the reductions.method CHECK to admit 'som'. We don't
+    migrate old databases in place (SOM is opt-in), so a project created before
+    this feature would reject the insert deep inside training. Catch it up front.
+    """
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='reductions'"
+    ).fetchone()
+    if row is not None and "'som'" not in row[0]:
+        raise RuntimeError(
+            "This project's database predates SOM support, so it can't store a "
+            "SOM reduction. Re-create the project with `fluster init` (and re-run "
+            "the pipeline) to use the grid view."
+        )
+
+
+def _auto_grid_size(n_samples: int) -> tuple[int, int]:
+    """A squarish grid with ~5*sqrt(n) total nodes (a common SOM heuristic)."""
+    side = max(2, round(math.sqrt(5 * math.sqrt(max(n_samples, 1)))))
+    return side, side
+
+
+def _store_som_nodes(
+    conn: sqlite3.Connection,
+    reduction_id: int,
+    weights: np.ndarray,
+    distance_map: np.ndarray,
+) -> None:
+    """Persist the SOM codebook: one row per grid node with its weight vector
+    (in the SOM's input space) and U-matrix distance."""
+    grid_x, grid_y = weights.shape[0], weights.shape[1]
+    conn.executemany(
+        "INSERT INTO som_nodes "
+        "(reduction_id, node_index, grid_i, grid_j, weight_json, umatrix_dist) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        [
+            (
+                reduction_id,
+                i * grid_y + j,
+                i,
+                j,
+                json.dumps(weights[i, j].tolist()),
+                float(distance_map[i, j]),
+            )
+            for i in range(grid_x)
+            for j in range(grid_y)
+        ],
+    )
+    conn.commit()
+
+
 def reduce_items(
     conn: sqlite3.Connection,
     plan: Plan,
@@ -100,6 +155,7 @@ def reduce_items(
     Pipeline per the plan:
     1. Optional PCA pre-reduction
     2. UMAP reductions (typically 2D and 8D)
+    3. Optional SOM grid reduction (opt-in; also writes a codebook to som_nodes)
 
     Each reduction is idempotent — skipped if it already exists.
     Returns a summary dict.
@@ -199,6 +255,48 @@ def reduce_items(
                 },
                 item_ids, coords,
             )
+            created += 1
+
+        elif isinstance(reduction_config, SOMReduction):
+            # SOM is always a 2D grid (one reduction per model, like umap_2d).
+            if _reduction_exists(conn, model_name, "som", 2):
+                skipped += 1
+                continue
+
+            _assert_som_supported(conn)
+
+            n_samples, input_len = working.shape
+            auto_x, auto_y = _auto_grid_size(n_samples)
+            grid_x = reduction_config.grid_x or auto_x
+            grid_y = reduction_config.grid_y or auto_y
+
+            som = MiniSom(
+                grid_x,
+                grid_y,
+                input_len,
+                sigma=reduction_config.sigma,
+                learning_rate=reduction_config.learning_rate,
+                random_seed=reduction_config.random_state,
+            )
+            som.random_weights_init(working)
+            som.train(working, reduction_config.num_iteration, random_order=True)
+
+            # Each item's coordinates are its best-matching unit (grid cell).
+            coords = np.array([som.winner(v) for v in working], dtype=np.float32)
+
+            reduction_id = _store_reduction(
+                conn, model_name, "som", 2,
+                {
+                    "grid_x": grid_x,
+                    "grid_y": grid_y,
+                    "sigma": reduction_config.sigma,
+                    "learning_rate": reduction_config.learning_rate,
+                    "num_iteration": reduction_config.num_iteration,
+                    "random_state": reduction_config.random_state,
+                },
+                item_ids, coords,
+            )
+            _store_som_nodes(conn, reduction_id, som.get_weights(), som.distance_map())
             created += 1
 
     return {"reductions_created": created, "skipped": skipped}

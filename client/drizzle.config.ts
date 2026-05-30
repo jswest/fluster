@@ -18,6 +18,7 @@ export default defineConfig({
 		'embeddings',
 		'reductions',
 		'reduction_coordinates',
+		'som_nodes',
 		'cluster_runs',
 		'cluster_assignments',
 		'cluster_exemplars',

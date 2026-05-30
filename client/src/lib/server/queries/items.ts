@@ -4,7 +4,9 @@ import {
 	items,
 	rows,
 	representations,
+	reductions,
 	reductionCoordinates,
+	somNodes,
 	clusterAssignments,
 	clusterRuns,
 	itemArtifacts,
@@ -37,15 +39,77 @@ function getImageArtifactIds(itemIds: number[]): Map<number, string> {
 	return map;
 }
 
-export function getScatterPlotData(clusterRunId: number) {
+export type Layout = {
+	reductionId: number;
+	method: string;
+	dims: number;
+	label: string;
+};
+
+function layoutLabel(method: string, dims: number): string {
+	if (method === 'som') return 'SOM grid';
+	if (method === 'umap') return 'UMAP';
+	if (method === 'pca') return 'PCA';
+	return `${method} ${dims}d`;
+}
+
+/**
+ * The 2D reductions a run can be laid out on, plus which one to show by default.
+ *
+ * A layout is decoupled from the reduction the clustering was computed on: any
+ * 2D reduction (umap_2d, som_2d, ...) can display any run's clusters. The
+ * default prefers the run's own reduction when it is itself 2D (so a SOM
+ * codebook run opens on the SOM grid), then a UMAP, then any 2D reduction.
+ *
+ * When no 2D reduction exists, `layouts` instead holds the run's own (non-2D)
+ * reduction so the view still renders from its first two dimensions — so
+ * callers must treat `dims` as load-bearing rather than assuming every Layout
+ * is 2D.
+ */
+export function getLayouts(clusterRunId: number): {
+	layouts: Layout[];
+	defaultReductionId: number | null;
+} {
 	const run = db
 		.select({ reductionId: clusterRuns.reductionId })
 		.from(clusterRuns)
 		.where(eq(clusterRuns.clusterRunId, clusterRunId))
 		.get();
 
-	if (!run) return [];
+	if (!run) return { layouts: [], defaultReductionId: null };
 
+	const cols = {
+		reductionId: reductions.reductionId,
+		method: reductions.method,
+		dims: reductions.targetDimensions
+	};
+
+	const twoD = db
+		.select(cols)
+		.from(reductions)
+		.where(eq(reductions.targetDimensions, 2))
+		.orderBy(reductions.reductionId)
+		.all();
+
+	const chosen = twoD.length > 0
+		? twoD
+		: db.select(cols).from(reductions).where(eq(reductions.reductionId, run.reductionId)).all();
+
+	if (chosen.length === 0) return { layouts: [], defaultReductionId: null };
+
+	const layouts = chosen.map((r) => ({ ...r, label: layoutLabel(r.method, r.dims) }));
+	const ownIs2D = twoD.some((r) => r.reductionId === run.reductionId);
+	const defaultReductionId =
+		twoD.length === 0
+			? chosen[0].reductionId
+			: ownIs2D
+				? run.reductionId
+				: (twoD.find((r) => r.method === 'umap') ?? twoD[0]).reductionId;
+
+	return { layouts, defaultReductionId };
+}
+
+export function getLayoutData(clusterRunId: number, reductionId: number) {
 	const rawRows = db
 		.select({
 			itemId: items.itemId,
@@ -68,7 +132,7 @@ export function getScatterPlotData(clusterRunId: number) {
 			reductionCoordinates,
 			and(
 				eq(reductionCoordinates.itemId, items.itemId),
-				eq(reductionCoordinates.reductionId, run.reductionId)
+				eq(reductionCoordinates.reductionId, reductionId)
 			)
 		)
 		.innerJoin(
@@ -99,6 +163,43 @@ export function getScatterPlotData(clusterRunId: number) {
 			imageArtifactId: imageMap.get(r.itemId) ?? null
 		};
 	});
+}
+
+export type SomGrid = {
+	gridX: number;
+	gridY: number;
+	nodes: { i: number; j: number; umatrixDist: number }[];
+};
+
+/** Grid dimensions + per-node U-matrix distances for a SOM reduction, or null
+ * if the reduction is not a SOM. Used to draw the grid background. */
+export function getSomGrid(reductionId: number): SomGrid | null {
+	const reduction = db
+		.select({ method: reductions.method, paramsJson: reductions.paramsJson })
+		.from(reductions)
+		.where(eq(reductions.reductionId, reductionId))
+		.get();
+
+	if (!reduction || reduction.method !== 'som') return null;
+
+	let params: { grid_x?: number; grid_y?: number } = {};
+	try {
+		params = JSON.parse(reduction.paramsJson);
+	} catch {}
+	if (params.grid_x == null || params.grid_y == null) return null;
+
+	const nodes = db
+		.select({
+			i: somNodes.gridI,
+			j: somNodes.gridJ,
+			umatrixDist: somNodes.umatrixDist
+		})
+		.from(somNodes)
+		.where(eq(somNodes.reductionId, reductionId))
+		.orderBy(somNodes.nodeIndex)
+		.all();
+
+	return { gridX: params.grid_x, gridY: params.grid_y, nodes };
 }
 
 export function getItemDetail(itemId: number) {

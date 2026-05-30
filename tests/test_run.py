@@ -32,6 +32,7 @@ _PIPELINE = "fluster.pipeline.run"
 
 
 @patch(f"{_PIPELINE}.critique_clusters", return_value={"critiqued": True, "skipped": False})
+@patch(f"{_PIPELINE}.reconcile_labels", return_value={"reconciled": 2, "skipped": False})
 @patch(f"{_PIPELINE}.label_clusters", return_value={"labeled": 2, "skipped": 0})
 @patch(f"{_PIPELINE}.select_exemplars", return_value={"exemplars_created": 6, "skipped": 0})
 @patch(f"{_PIPELINE}.cluster_items", return_value={"runs_created": 1, "skipped": 0, "cluster_run_ids": [1]})
@@ -39,7 +40,7 @@ _PIPELINE = "fluster.pipeline.run"
 @patch(f"{_PIPELINE}.embed_items", return_value={"embedded": 10, "total": 10})
 @patch(f"{_PIPELINE}.materialize_items", return_value={"materialized": 10, "skipped": 0})
 def test_happy_path(
-    mock_mat, mock_emb, mock_red, mock_clu, mock_exe, mock_lab, mock_cri,
+    mock_mat, mock_emb, mock_red, mock_clu, mock_exe, mock_lab, mock_rec, mock_cri,
     conn, plan,
 ):
     job_id = create_job(conn, "full_run")
@@ -48,13 +49,14 @@ def test_happy_path(
     summary = run_pipeline(conn, project_dir("test-proj"), plan, job_id)
 
     assert summary["completed_steps"] == summary["total_steps"]
-    assert summary["total_steps"] == 7  # 4 + 3*1
+    assert summary["total_steps"] == 8  # 4 + 4*1
     mock_mat.assert_called_once()
     mock_emb.assert_called_once()
     mock_red.assert_called_once()
     mock_clu.assert_called_once()
     mock_exe.assert_called_once()
     mock_lab.assert_called_once()
+    mock_rec.assert_called_once()
     mock_cri.assert_called_once()
 
 
@@ -62,6 +64,7 @@ def test_happy_path(
 
 
 @patch(f"{_PIPELINE}.critique_clusters")
+@patch(f"{_PIPELINE}.reconcile_labels")
 @patch(f"{_PIPELINE}.label_clusters")
 @patch(f"{_PIPELINE}.select_exemplars")
 @patch(f"{_PIPELINE}.cluster_items", return_value={"runs_created": 1, "skipped": 0, "cluster_run_ids": [1]})
@@ -70,7 +73,7 @@ def test_happy_path(
 @patch(f"{_PIPELINE}.materialize_items", return_value={"materialized": 10, "skipped": 0})
 @patch(f"{_PIPELINE}.is_cancel_requested")
 def test_cancellation_stops_pipeline(
-    mock_cancel, mock_mat, mock_emb, mock_red, mock_clu, mock_exe, mock_lab, mock_cri,
+    mock_cancel, mock_mat, mock_emb, mock_red, mock_clu, mock_exe, mock_lab, mock_rec, mock_cri,
     conn, plan,
 ):
     # Cancel after embed (second cancel check).
@@ -94,6 +97,7 @@ def test_cancellation_stops_pipeline(
 
 
 @patch(f"{_PIPELINE}.critique_clusters", return_value={"critiqued": True, "skipped": False})
+@patch(f"{_PIPELINE}.reconcile_labels", return_value={"reconciled": 2, "skipped": False})
 @patch(f"{_PIPELINE}.label_clusters", return_value={"labeled": 2, "skipped": 0})
 @patch(f"{_PIPELINE}.select_exemplars", return_value={"exemplars_created": 6, "skipped": 0})
 @patch(f"{_PIPELINE}.cluster_items", return_value={"runs_created": 2, "skipped": 0, "cluster_run_ids": [1, 2]})
@@ -101,7 +105,7 @@ def test_cancellation_stops_pipeline(
 @patch(f"{_PIPELINE}.embed_items", return_value={"embedded": 10, "total": 10})
 @patch(f"{_PIPELINE}.materialize_items", return_value={"materialized": 10, "skipped": 0})
 def test_multiple_cluster_runs(
-    mock_mat, mock_emb, mock_red, mock_clu, mock_exe, mock_lab, mock_cri,
+    mock_mat, mock_emb, mock_red, mock_clu, mock_exe, mock_lab, mock_rec, mock_cri,
     conn, plan,
 ):
     job_id = create_job(conn, "full_run")
@@ -109,9 +113,10 @@ def test_multiple_cluster_runs(
 
     summary = run_pipeline(conn, project_dir("test-proj"), plan, job_id)
 
-    assert summary["total_steps"] == 10  # 4 + 3*2
+    assert summary["total_steps"] == 12  # 4 + 4*2
     assert mock_exe.call_count == 2
     assert mock_lab.call_count == 2
+    assert mock_rec.call_count == 2
     assert mock_cri.call_count == 2
 
 
@@ -119,6 +124,7 @@ def test_multiple_cluster_runs(
 
 
 @patch(f"{_PIPELINE}.critique_clusters", return_value={"critiqued": True, "skipped": False})
+@patch(f"{_PIPELINE}.reconcile_labels", return_value={"reconciled": 2, "skipped": False})
 @patch(f"{_PIPELINE}.label_clusters", return_value={"labeled": 2, "skipped": 0})
 @patch(f"{_PIPELINE}.select_exemplars", return_value={"exemplars_created": 6, "skipped": 0})
 @patch(f"{_PIPELINE}.cluster_items", return_value={"runs_created": 1, "skipped": 0, "cluster_run_ids": [1]})
@@ -126,7 +132,7 @@ def test_multiple_cluster_runs(
 @patch(f"{_PIPELINE}.embed_items", return_value={"embedded": 10, "total": 10})
 @patch(f"{_PIPELINE}.materialize_items", return_value={"materialized": 10, "skipped": 0})
 def test_progress_updated(
-    mock_mat, mock_emb, mock_red, mock_clu, mock_exe, mock_lab, mock_cri,
+    mock_mat, mock_emb, mock_red, mock_clu, mock_exe, mock_lab, mock_rec, mock_cri,
     conn, plan,
 ):
     job_id = create_job(conn, "full_run")
@@ -144,6 +150,7 @@ def test_progress_updated(
 
 
 @patch(f"{_PIPELINE}.critique_clusters", return_value={"critiqued": True, "skipped": False})
+@patch(f"{_PIPELINE}.reconcile_labels", return_value={"reconciled": 2, "skipped": False})
 @patch(f"{_PIPELINE}.label_clusters", return_value={"labeled": 2, "skipped": 0})
 @patch(f"{_PIPELINE}.select_exemplars", return_value={"exemplars_created": 6, "skipped": 0})
 @patch(f"{_PIPELINE}.cluster_items", return_value={"runs_created": 1, "skipped": 0, "cluster_run_ids": [1]})
@@ -151,7 +158,7 @@ def test_progress_updated(
 @patch(f"{_PIPELINE}.embed_items", return_value={"embedded": 10, "total": 10})
 @patch(f"{_PIPELINE}.materialize_items", return_value={"materialized": 10, "skipped": 0})
 def test_embed_receives_job_id(
-    mock_mat, mock_emb, mock_red, mock_clu, mock_exe, mock_lab, mock_cri,
+    mock_mat, mock_emb, mock_red, mock_clu, mock_exe, mock_lab, mock_rec, mock_cri,
     conn, plan,
 ):
     job_id = create_job(conn, "full_run")

@@ -174,3 +174,46 @@ def test_schema_idempotent(conn):
         "('rows','artifacts','items','item_artifacts','representations')"
     ).fetchone()[0]
     assert tables == 5
+
+
+def test_som_nodes_table_exists(conn):
+    row = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='som_nodes'"
+    ).fetchone()
+    assert row is not None
+
+
+def test_reductions_accepts_som_method(conn):
+    """The reductions.method CHECK admits 'som' (new schema)."""
+    conn.execute(
+        "INSERT INTO reductions (embedding_reference, method, target_dimensions) "
+        "VALUES (?, 'som', 2)",
+        ("model-x",),
+    )
+    row = conn.execute("SELECT method FROM reductions").fetchone()
+    assert row["method"] == "som"
+
+
+def test_reductions_rejects_unknown_method(conn):
+    with pytest.raises(Exception):
+        conn.execute(
+            "INSERT INTO reductions (embedding_reference, method, target_dimensions) "
+            "VALUES (?, 'tsne', 2)",
+            ("model-x",),
+        )
+
+
+def test_som_nodes_requires_valid_json(conn):
+    cur = conn.execute(
+        "INSERT INTO reductions (embedding_reference, method, target_dimensions) "
+        "VALUES (?, 'som', 2)",
+        ("model-x",),
+    )
+    reduction_id = cur.lastrowid
+    with pytest.raises(Exception):
+        conn.execute(
+            "INSERT INTO som_nodes "
+            "(reduction_id, node_index, grid_i, grid_j, weight_json, umatrix_dist) "
+            "VALUES (?, 0, 0, 0, 'not-json', 0.5)",
+            (reduction_id,),
+        )

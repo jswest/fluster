@@ -94,6 +94,17 @@ export const reductionCoordinates = sqliteTable("reduction_coordinates", {
 	primaryKey({ columns: [table.reductionId, table.itemId], name: "reduction_coordinates_reduction_id_item_id_pk"}),
 ]);
 
+export const somNodes = sqliteTable("som_nodes", {
+	reductionId: integer("reduction_id").notNull().references(() => reductions.reductionId),
+	nodeIndex: integer("node_index").notNull(),
+	gridI: integer("grid_i").notNull(),
+	gridJ: integer("grid_j").notNull(),
+	weightJson: text("weight_json").notNull(),
+	umatrixDist: real("umatrix_dist").notNull(),
+}, (table) => [
+	primaryKey({ columns: [table.reductionId, table.nodeIndex], name: "som_nodes_reduction_id_node_index_pk"}),
+]);
+
 export const clusterRuns = sqliteTable("cluster_runs", {
 	clusterRunId: integer("cluster_run_id").primaryKey({ autoIncrement: true }),
 	reductionId: integer("reduction_id").notNull().references(() => reductions.reductionId),

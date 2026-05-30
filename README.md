@@ -7,10 +7,11 @@
 - Materialize rows into structured items
 - Extract and normalize text
 - Generate embeddings
-- Reduce dimensions (PCA + UMAP)
-- Cluster (HDBSCAN or agglomerative)
+- Reduce dimensions (PCA + UMAP, or a SOM grid)
+- Cluster (HDBSCAN or agglomerative — on coordinates or a SOM codebook)
 - Select exemplars from each cluster's core and outskirts
 - Label clusters with an LLM (BYO)
+- Reconcile labels across the whole run for consistency
 - Critique the clustering run
 - Keep an auditable trail of every step
 
@@ -106,13 +107,13 @@ fluster init my-project
 # Set up your API key (stored in ~/.fluster/secrets.yaml)
 fluster config
 
-# Tweak the plan if you want (embedding model, LLM, UMAP + clustering params)
+# Tweak the plan if you want (embedding model, LLM, UMAP + clustering, optional SOM grid)
 fluster plan
 
 # Ingest a CSV — file_path column is optional
 fluster ingest-rows data.csv
 
-# Run the full pipeline (materialize → embed → reduce → cluster → exemplars → label → critique)
+# Run the full pipeline (materialize → embed → reduce → cluster → exemplars → label → reconcile → critique)
 fluster run
 
 # Check on jobs and logs
@@ -142,6 +143,48 @@ fluster cancel 1 --force
 fluster list
 fluster use other-project
 ```
+
+---
+
+## SOM grid view (optional)
+
+Points-on-a-plane (UMAP) is the default way to look at a run. If you'd rather see
+your data laid out on a tidy grid, `fluster` can also train a [self-organizing
+map](https://en.wikipedia.org/wiki/Self-organizing_map) (SOM). It's **opt-in** —
+nothing changes unless you ask for it. Run `fluster plan` and it'll ask whether
+to add a SOM grid (with grid size, sigma, learning rate, iterations) and whether
+to cluster its codebook; answer no later and it cleans both back out. That writes
+a `plan.yaml` like this:
+
+```yaml
+reductions:
+  - method: pca
+    target_dimensions: 50
+  - method: umap
+    target_dimensions: 2
+  - method: umap
+    target_dimensions: 8
+  - method: som          # the new bit — trains a grid (grid_x/grid_y auto-size if omitted)
+
+clustering:
+  - method: hdbscan      # your usual run, on the umap_8d coordinates
+    reduction: umap_8d
+    params: { min_cluster_size: 5 }
+  - method: agglomerative # a two-level SOM: cluster the grid's codebook...
+    reduction: som_2d
+    target: codebook      # ...and hand each item the cluster of its grid cell
+    params: { n_clusters: 8 }
+```
+
+Run `fluster run` as usual, then `fluster chill`. On a run's page you'll get a
+**UMAP / SOM grid** toggle: the grid shades each cell by its U-matrix distance
+(how far it sits from its neighbors), tints it by the cluster living there, and
+darkens it by how many items landed in it. Click a cell to inspect what's inside.
+
+A SOM is just another reduction with receipts, so it's stored, versioned, and
+seed-fixed like everything else. (Heads up: it's a new table, so a project made
+before SOM support won't grow one retroactively — `fluster init` a fresh one to
+play with it.)
 
 ---
 

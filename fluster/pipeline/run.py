@@ -11,6 +11,7 @@ from fluster.pipeline.embed import embed_items
 from fluster.pipeline.exemplars import select_exemplars
 from fluster.pipeline.label import label_clusters
 from fluster.pipeline.materialize import materialize_items
+from fluster.pipeline.reconcile import reconcile_labels
 from fluster.pipeline.reduce import reduce_items
 
 
@@ -35,7 +36,7 @@ def run_pipeline(
     job_id: int,
     on_step=None,
 ) -> dict:
-    """Execute the full pipeline: materialize → embed → reduce → cluster → exemplars → label → critique.
+    """Execute the full pipeline: materialize → embed → reduce → cluster → exemplars → label → reconcile → critique.
 
     Does NOT manage job lifecycle (create/start/succeed/fail) — the caller
     handles that. Raises PipelineCancelled if cancellation is requested.
@@ -84,11 +85,11 @@ def run_pipeline(
     # run ever stored — otherwise orphaned runs from past plan edits get
     # re-labeled/critiqued on every invocation (see issue #22).
     cluster_run_ids = result["cluster_run_ids"]
-    total_steps = 4 + 3 * len(cluster_run_ids)
+    total_steps = 4 + 4 * len(cluster_run_ids)
     _step("cluster")
     _check_cancel(conn, job_id)
 
-    # Steps 5-7: per cluster_run
+    # Steps 5-8: per cluster_run
     for cluster_run_id in cluster_run_ids:
         log_job(conn, job_id, f"Starting select_exemplars for cluster_run {cluster_run_id}")
         result = select_exemplars(conn, cluster_run_id)
@@ -100,6 +101,12 @@ def run_pipeline(
         result = label_clusters(conn, cluster_run_id, plan.llm, job_id=job_id)
         log_job(conn, job_id, f"label_clusters complete for cluster_run {cluster_run_id}", payload=result)
         _step("label")
+        _check_cancel(conn, job_id)
+
+        log_job(conn, job_id, f"Starting reconcile_labels for cluster_run {cluster_run_id}")
+        result = reconcile_labels(conn, cluster_run_id, plan.llm, job_id=job_id)
+        log_job(conn, job_id, f"reconcile_labels complete for cluster_run {cluster_run_id}", payload=result)
+        _step("reconcile")
         _check_cancel(conn, job_id)
 
         log_job(conn, job_id, f"Starting critique_clusters for cluster_run {cluster_run_id}")
