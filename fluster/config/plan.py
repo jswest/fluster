@@ -31,8 +31,23 @@ class UMAPReduction(BaseModel):
     min_dist: float = 0.1
 
 
+class SOMReduction(BaseModel):
+    """Self-organizing map. Always a 2D grid; produces grid coordinates per item
+    plus a codebook (stored in `som_nodes`). grid_x/grid_y default to an auto
+    size (~5*sqrt(n) total nodes, squarish) resolved at reduction time."""
+
+    method: Literal["som"] = "som"
+    target_dimensions: Literal[2] = 2
+    grid_x: int | None = None
+    grid_y: int | None = None
+    sigma: float = 1.0
+    learning_rate: float = 0.5
+    num_iteration: int = 1000
+    random_state: int = SEED
+
+
 ReductionConfig = Annotated[
-    PCAReduction | UMAPReduction, Field(discriminator="method")
+    PCAReduction | UMAPReduction | SOMReduction, Field(discriminator="method")
 ]
 
 
@@ -52,6 +67,10 @@ class ClusteringConfig(BaseModel):
     method: Literal["hdbscan", "agglomerative"] = "hdbscan"
     reduction: str = "umap_8d"  # Format: "{method}_{dimensions}d"
     params: dict = Field(default_factory=dict)
+    # "coordinates" clusters each item's reduction coordinates directly.
+    # "codebook" clusters a SOM's node weights (two-level SOM) and propagates
+    # each node's cluster to the items whose best-matching unit it is.
+    target: Literal["coordinates", "codebook"] = "coordinates"
 
     @model_validator(mode="after")
     def _apply_method_defaults(self) -> ClusteringConfig:

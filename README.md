@@ -7,8 +7,8 @@
 - Materialize rows into structured items
 - Extract and normalize text
 - Generate embeddings
-- Reduce dimensions (PCA + UMAP)
-- Cluster (HDBSCAN or agglomerative)
+- Reduce dimensions (PCA + UMAP, or a SOM grid)
+- Cluster (HDBSCAN or agglomerative — on coordinates or a SOM codebook)
 - Select exemplars from each cluster's core and outskirts
 - Label clusters with an LLM (BYO)
 - Critique the clustering run
@@ -137,6 +137,46 @@ fluster cancel 1 --force
 fluster list
 fluster use other-project
 ```
+
+---
+
+## SOM grid view (optional)
+
+Points-on-a-plane (UMAP) is the default way to look at a run. If you'd rather see
+your data laid out on a tidy grid, `fluster` can also train a [self-organizing
+map](https://en.wikipedia.org/wiki/Self-organizing_map) (SOM). It's **opt-in** —
+nothing changes unless you ask for it — so add it to your `plan.yaml` with
+`fluster plan`:
+
+```yaml
+reductions:
+  - method: pca
+    target_dimensions: 50
+  - method: umap
+    target_dimensions: 2
+  - method: umap
+    target_dimensions: 8
+  - method: som          # the new bit — trains a grid (grid_x/grid_y auto-size if omitted)
+
+clustering:
+  - method: hdbscan      # your usual run, on the umap_8d coordinates
+    reduction: umap_8d
+    params: { min_cluster_size: 5 }
+  - method: agglomerative # a two-level SOM: cluster the grid's codebook...
+    reduction: som_2d
+    target: codebook      # ...and hand each item the cluster of its grid cell
+    params: { n_clusters: 8 }
+```
+
+Run `fluster run` as usual, then `fluster chill`. On a run's page you'll get a
+**UMAP / SOM grid** toggle: the grid shades each cell by its U-matrix distance
+(how far it sits from its neighbors), tints it by the cluster living there, and
+darkens it by how many items landed in it. Click a cell to inspect what's inside.
+
+A SOM is just another reduction with receipts, so it's stored, versioned, and
+seed-fixed like everything else. (Heads up: it's a new table, so a project made
+before SOM support won't grow one retroactively — `fluster init` a fresh one to
+play with it.)
 
 ---
 
