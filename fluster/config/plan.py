@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from enum import Enum
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 import yaml
 from pydantic import BaseModel, Field
@@ -27,9 +27,13 @@ class UMAPReduction(BaseModel):
     method: Literal["umap"] = "umap"
     target_dimensions: int = 2
     random_state: int = SEED
+    n_neighbors: int = 15  # capped at n_samples - 1 at fit time
+    min_dist: float = 0.1
 
 
-ReductionConfig = PCAReduction | UMAPReduction
+ReductionConfig = Annotated[
+    PCAReduction | UMAPReduction, Field(discriminator="method")
+]
 
 
 class HDBSCANParams(BaseModel):

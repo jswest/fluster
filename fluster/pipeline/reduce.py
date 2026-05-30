@@ -164,9 +164,14 @@ def reduce_items(
                 skipped += 1
                 continue
 
-            # UMAP needs n_neighbors <= n_samples.
+            # UMAP needs n_neighbors <= n_samples; cap the configured value.
             n_samples = working.shape[0]
-            n_neighbors = min(15, n_samples - 1) if n_samples > 1 else 1
+            n_neighbors = (
+                min(reduction_config.n_neighbors, n_samples - 1)
+                if n_samples > 1
+                else 1
+            )
+            min_dist = reduction_config.min_dist
 
             # Spectral init fails when n_samples is very small; fall back to random.
             init = "spectral" if n_samples > n_neighbors + 1 else "random"
@@ -174,6 +179,7 @@ def reduce_items(
             reducer = UMAP(
                 n_components=target,
                 n_neighbors=n_neighbors,
+                min_dist=min_dist,
                 random_state=random_state,
                 init=init,
             )
@@ -188,6 +194,7 @@ def reduce_items(
                 {
                     "n_components": target,
                     "n_neighbors": n_neighbors,
+                    "min_dist": min_dist,
                     "random_state": random_state,
                 },
                 item_ids, coords,
