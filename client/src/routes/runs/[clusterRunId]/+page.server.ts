@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { getRun, getClusterDetails, getCritique } from '$lib/server/queries/runs';
-import { getScatterPlotData } from '$lib/server/queries/items';
+import { getLayouts, getLayoutData } from '$lib/server/queries/items';
 
 export function load({ params }) {
 	const clusterRunId = Number(params.clusterRunId);
@@ -9,10 +9,14 @@ export function load({ params }) {
 	const run = getRun(clusterRunId);
 	if (!run) throw error(404, 'Cluster run not found');
 
+	const { layouts, defaultReductionId } = getLayouts(clusterRunId);
+
 	return {
 		run,
 		clusters: getClusterDetails(clusterRunId),
 		critique: getCritique(clusterRunId),
-		points: getScatterPlotData(clusterRunId)
+		layouts,
+		activeReductionId: defaultReductionId,
+		points: defaultReductionId == null ? [] : getLayoutData(clusterRunId, defaultReductionId)
 	};
 }
