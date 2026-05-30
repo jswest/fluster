@@ -4,12 +4,22 @@
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import Input from '$lib/components/Input.svelte';
 	import ScatterPlot from '$lib/components/ScatterPlot.svelte';
+	import SomGrid from '$lib/components/SomGrid.svelte';
 	import ItemDrawer from '$lib/components/ItemDrawer.svelte';
 	import ClusterDrawer from '$lib/components/ClusterDrawer.svelte';
 	import { createClusterColorScale } from '$lib/cluster-colors';
 	import { formatTime, formatPercent } from '$lib/format';
+	import { goto } from '$app/navigation';
 
 	let { data } = $props();
+
+	const activeLayout = $derived(
+		data.layouts.find((l) => l.reductionId === data.activeReductionId) ?? null
+	);
+
+	function selectLayout(reductionId: number) {
+		goto(`?layout=${reductionId}`, { noScroll: true, keepFocus: true });
+	}
 
 	let search = $state('');
 	let showCritique = $state(false);
@@ -141,10 +151,24 @@
 	</div>
 
 	<div class="main-area">
+		{#if data.layouts.length > 1}
+			<div class="layout-switch">
+				{#each data.layouts as layout}
+					<button
+						class="layout-btn"
+						class:active={layout.reductionId === data.activeReductionId}
+						onclick={() => selectLayout(layout.reductionId)}
+					>{layout.label}</button>
+				{/each}
+			</div>
+		{/if}
+
 		{#if data.points.length === 0}
 			<div class="container stack">
-				<EmptyState message="No UMAP data available for this run." />
+				<EmptyState message="No layout data available for this run." />
 			</div>
+		{:else if activeLayout?.method === 'som' && data.somGrid}
+			<SomGrid points={data.points} somGrid={data.somGrid} getColor={getClusterColor} {focusClusterId} onSelect={handlePointSelect} />
 		{:else}
 			<ScatterPlot points={data.points} getColor={getClusterColor} {focusClusterId} onSelect={handlePointSelect} />
 		{/if}
@@ -231,6 +255,26 @@
 		flex: 1;
 		position: relative;
 		overflow: hidden;
+	}
+
+	.layout-switch {
+		position: absolute;
+		top: 0.5rem;
+		left: 0.5rem;
+		z-index: 5;
+		display: flex;
+		gap: 0.5rem;
+	}
+
+	.layout-btn {
+		padding: 0.25rem 0.75rem;
+		font-size: 0.8125rem;
+	}
+
+	.layout-btn.active {
+		background: var(--color-bg);
+		color: var(--color-fg);
+		border: 1px solid var(--color-fg);
 	}
 
 	.rail-header {

@@ -6,6 +6,7 @@ import {
 	representations,
 	reductions,
 	reductionCoordinates,
+	somNodes,
 	clusterAssignments,
 	clusterRuns,
 	itemArtifacts,
@@ -162,6 +163,43 @@ export function getLayoutData(clusterRunId: number, reductionId: number) {
 			imageArtifactId: imageMap.get(r.itemId) ?? null
 		};
 	});
+}
+
+export type SomGrid = {
+	gridX: number;
+	gridY: number;
+	nodes: { i: number; j: number; umatrixDist: number }[];
+};
+
+/** Grid dimensions + per-node U-matrix distances for a SOM reduction, or null
+ * if the reduction is not a SOM. Used to draw the grid background. */
+export function getSomGrid(reductionId: number): SomGrid | null {
+	const reduction = db
+		.select({ method: reductions.method, paramsJson: reductions.paramsJson })
+		.from(reductions)
+		.where(eq(reductions.reductionId, reductionId))
+		.get();
+
+	if (!reduction || reduction.method !== 'som') return null;
+
+	let params: { grid_x?: number; grid_y?: number } = {};
+	try {
+		params = JSON.parse(reduction.paramsJson);
+	} catch {}
+	if (params.grid_x == null || params.grid_y == null) return null;
+
+	const nodes = db
+		.select({
+			i: somNodes.gridI,
+			j: somNodes.gridJ,
+			umatrixDist: somNodes.umatrixDist
+		})
+		.from(somNodes)
+		.where(eq(somNodes.reductionId, reductionId))
+		.orderBy(somNodes.nodeIndex)
+		.all();
+
+	return { gridX: params.grid_x, gridY: params.grid_y, nodes };
 }
 
 export function getItemDetail(itemId: number) {
