@@ -1,11 +1,12 @@
-"""Tests for CLI commands: run, jobs, job, cancel."""
+"""Tests for CLI commands: run, jobs, job, cancel, chill."""
 
-from unittest.mock import patch
+import os
+from unittest.mock import MagicMock, patch
 
 import pytest
 from typer.testing import CliRunner
 
-from fluster.cli import app
+from fluster.cli import app, _client_build_is_stale
 from fluster.config import settings
 from fluster.config.project import create_project, project_dir, project_exists, set_active_project
 from fluster.db.connection import connect
@@ -164,3 +165,99 @@ def test_plan_sets_umap_options(named_project):
     assert umaps
     assert all(r.n_neighbors == 25 for r in umaps)
     assert all(r.min_dist == 0.2 for r in umaps)
+
+
+# --- fluster chill ---
+
+_BUILD_EPOCH = 1_000_000_000  # fixed base mtime so freshness is deterministic
+
+
+def _make_client_dir(tmp_path, *, built=True, stale=False):
+    """Build a fake client/ tree with controlled mtimes for staleness tests."""
+    client = tmp_path / "client"
+    (client / "src").mkdir(parents=True)
+    src = client / "src" / "app.css"
+    src.write_text("/* x */")
+    config = client / "package.json"
+    config.write_text("{}")
+
+    if built:
+        build_file = client / "build" / "index.js"
+        build_file.parent.mkdir(parents=True)
+        build_file.write_text("// built")
+        os.utime(build_file, (_BUILD_EPOCH, _BUILD_EPOCH))
+        src_mtime = _BUILD_EPOCH + 10 if stale else _BUILD_EPOCH - 10
+        os.utime(src, (src_mtime, src_mtime))
+        os.utime(config, (src_mtime, src_mtime))
+    return client
+
+
+def _chill_cmds(mock_run):
+    """The command list passed to each subprocess.run call, in order."""
+    return [call.args[0] for call in mock_run.call_args_list]
+
+
+def test_client_build_is_stale_when_missing(tmp_path):
+    assert _client_build_is_stale(_make_client_dir(tmp_path, built=False)) is True
+
+
+def test_client_build_is_stale_when_source_newer(tmp_path):
+    assert _client_build_is_stale(_make_client_dir(tmp_path, built=True, stale=True)) is True
+
+
+def test_client_build_is_fresh_when_build_newer(tmp_path):
+    assert _client_build_is_stale(_make_client_dir(tmp_path, built=True, stale=False)) is False
+
+
+@patch("fluster.cli.subprocess.run")
+def test_chill_stale_auto_rebuilds(mock_run, named_project, tmp_path, monkeypatch):
+    mock_run.return_value = MagicMock(returncode=0)
+    monkeypatch.setattr(settings, "CLIENT_DIR", _make_client_dir(tmp_path, built=True, stale=True))
+    result = runner.invoke(app, ["chill"])
+    assert result.exit_code == 0
+    assert _chill_cmds(mock_run) == [["npm", "run", "build"], ["node", "build/index.js"]]
+
+
+@patch("fluster.cli.subprocess.run")
+def test_chill_fresh_serves_without_rebuild(mock_run, named_project, tmp_path, monkeypatch):
+    mock_run.return_value = MagicMock(returncode=0)
+    monkeypatch.setattr(settings, "CLIENT_DIR", _make_client_dir(tmp_path, built=True, stale=False))
+    result = runner.invoke(app, ["chill"])
+    assert result.exit_code == 0
+    assert _chill_cmds(mock_run) == [["node", "build/index.js"]]
+
+
+@patch("fluster.cli.subprocess.run")
+def test_chill_no_rebuild_serves_stale(mock_run, named_project, tmp_path, monkeypatch):
+    mock_run.return_value = MagicMock(returncode=0)
+    monkeypatch.setattr(settings, "CLIENT_DIR", _make_client_dir(tmp_path, built=True, stale=True))
+    result = runner.invoke(app, ["chill", "--no-rebuild"])
+    assert result.exit_code == 0
+    assert _chill_cmds(mock_run) == [["node", "build/index.js"]]
+
+
+@patch("fluster.cli.subprocess.run")
+def test_chill_no_rebuild_missing_build_errors(mock_run, named_project, tmp_path, monkeypatch):
+    mock_run.return_value = MagicMock(returncode=0)
+    monkeypatch.setattr(settings, "CLIENT_DIR", _make_client_dir(tmp_path, built=False))
+    result = runner.invoke(app, ["chill", "--no-rebuild"])
+    assert result.exit_code == 1
+    mock_run.assert_not_called()
+
+
+@patch("fluster.cli.subprocess.run")
+def test_chill_failed_rebuild_exits_before_serving(mock_run, named_project, tmp_path, monkeypatch):
+    mock_run.return_value = MagicMock(returncode=2)
+    monkeypatch.setattr(settings, "CLIENT_DIR", _make_client_dir(tmp_path, built=True, stale=True))
+    result = runner.invoke(app, ["chill"])
+    assert result.exit_code == 2
+    assert _chill_cmds(mock_run) == [["npm", "run", "build"]]
+
+
+@patch("fluster.cli.subprocess.run")
+def test_chill_dev_mode_skips_staleness(mock_run, named_project, tmp_path, monkeypatch):
+    mock_run.return_value = MagicMock(returncode=0)
+    monkeypatch.setattr(settings, "CLIENT_DIR", _make_client_dir(tmp_path, built=False))
+    result = runner.invoke(app, ["chill", "--dev"])
+    assert result.exit_code == 0
+    assert _chill_cmds(mock_run) == [["npm", "run", "dev", "--", "--port", "3000", "--host", "127.0.0.1"]]

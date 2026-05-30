@@ -568,11 +568,38 @@ def serve(
     uvicorn.run(fastapi_app, host=host, port=port)
 
 
+# Config files (alongside client/src/) whose timestamps mark the build as stale.
+_CLIENT_BUILD_CONFIG_FILES = ("package.json", "svelte.config.js", "vite.config.ts", "tsconfig.json")
+
+
+def _client_build_is_stale(client_dir: Path) -> bool:
+    """True if the built client bundle is missing or older than any source file."""
+    build_file = client_dir / "build" / "index.js"
+    if not build_file.is_file():
+        return True
+    build_mtime = build_file.stat().st_mtime
+
+    sources = list((client_dir / "src").rglob("*"))
+    sources += [client_dir / name for name in _CLIENT_BUILD_CONFIG_FILES]
+    for path in sources:
+        try:
+            if path.is_file() and path.stat().st_mtime > build_mtime:
+                return True
+        except OSError:
+            continue
+    return False
+
+
 @app.command()
 def chill(
     port: int = typer.Option(3000, "--port", help="Port to serve on."),
     host: str = typer.Option("127.0.0.1", "--host", help="Bind address."),
     dev: bool = typer.Option(False, "--dev", help="Run SvelteKit dev server instead of production build."),
+    no_rebuild: bool = typer.Option(
+        False,
+        "--no-rebuild",
+        help="Don't auto-rebuild a stale client; serve the existing build (error if missing).",
+    ),
 ):
     """Launch the fluster visualization UI for the active project."""
     project_name = _resolve_project()
@@ -598,12 +625,34 @@ def chill(
     if dev:
         cmd = ["npm", "run", "dev", "--", "--port", str(port), "--host", host]
     else:
-        if not (client_dir / "build" / "index.js").is_file():
-            logger.error(
-                "Client not built. Run 'npm run build' in the client/ directory, "
-                "or use --dev for the dev server."
+        build_file = client_dir / "build" / "index.js"
+        stale = _client_build_is_stale(client_dir)
+        if stale and no_rebuild:
+            if not build_file.is_file():
+                logger.error(
+                    "Client not built. Run 'npm run build' in the client/ directory, "
+                    "or use --dev for the dev server."
+                )
+                raise typer.Exit(code=1)
+            logger.warning(
+                "Client build is stale (source newer than build/). Serving anyway; "
+                "run 'npm run build' in client/ to pick up the latest changes."
             )
-            raise typer.Exit(code=1)
+        elif stale:
+            if build_file.is_file():
+                logger.warning("Client build is stale (source newer than build/).")
+            else:
+                logger.info("Client not built yet.")
+            logger.info("Rebuilding client (npm run build)...")
+            try:
+                build = subprocess.run(["npm", "run", "build"], cwd=client_dir)
+            except FileNotFoundError:
+                logger.error("npm not found. Install Node.js/npm, or use --dev / --no-rebuild.")
+                raise typer.Exit(code=1)
+            if build.returncode != 0:
+                logger.error("Client build failed. See the output above, or use --dev.")
+                raise typer.Exit(code=build.returncode)
+            logger.info("Rebuild complete.")
         cmd = ["node", "build/index.js"]
 
     url = f"http://{host}:{port}"
