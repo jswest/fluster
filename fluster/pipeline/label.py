@@ -19,12 +19,11 @@ class ClusterLabel(BaseModel):
 
 _EXEMPLAR_TEXT_LIMIT = 500  # chars; keeps LLM prompt size manageable
 
-_PROMPT_TEMPLATE = """You are labeling a cluster of items. Below are representative examples (exemplars) from the cluster, along with the cluster size.
+_PROMPT_TEMPLATE = """You are labeling a cluster of items. Below are example items sampled from the cluster of {cluster_size} members. Some are central (the most typical members); others are from the cluster's outskirts (near its edges).
 
 Cluster size: {cluster_size}
 
-Exemplar texts:
-{exemplar_texts}
+{exemplar_sections}
 
 Respond with a JSON object containing:
 - "label": A descriptive label for this cluster (1-5 words)
@@ -48,20 +47,46 @@ def _get_clusters(conn: sqlite3.Connection, cluster_run_id: int) -> list[tuple[i
 
 def _get_exemplar_texts(
     conn: sqlite3.Connection, cluster_run_id: int, cluster_id: int
-) -> list[str]:
-    """Get embedding_text for each exemplar in a cluster, ordered by rank."""
+) -> dict[str, list[str]]:
+    """Get exemplar embedding_text grouped by kind ('center' / 'outskirt').
+
+    Each group is ordered by rank.
+    """
     rows = conn.execute(
         """
-        SELECT r.text
+        SELECT ce.kind, r.text
         FROM cluster_exemplars ce
         JOIN representations r ON r.item_id = ce.item_id
             AND r.representation_type = 'embedding_text'
         WHERE ce.cluster_run_id = ? AND ce.cluster_id = ?
-        ORDER BY ce.rank
+        ORDER BY ce.kind, ce.rank
         """,
         (cluster_run_id, cluster_id),
     ).fetchall()
-    return [r["text"][:_EXEMPLAR_TEXT_LIMIT] for r in rows]
+
+    grouped: dict[str, list[str]] = {"center": [], "outskirt": []}
+    for row in rows:
+        grouped.setdefault(row["kind"], []).append(row["text"][:_EXEMPLAR_TEXT_LIMIT])
+    return grouped
+
+
+def _format_exemplar_sections(grouped: dict[str, list[str]]) -> str:
+    """Render center/outskirt exemplar texts into labeled prompt sections.
+
+    Omits a section when it has no exemplars (e.g. tiny clusters with no
+    distinct outskirts).
+    """
+    sections = []
+    for kind, heading, noun in (
+        ("center", "Central examples (most typical of the cluster):", "Central"),
+        ("outskirt", "Outskirts examples (near the cluster's edges):", "Outskirts"),
+    ):
+        texts = grouped.get(kind, [])
+        if not texts:
+            continue
+        body = "\n---\n".join(f"[{noun} example {i+1}]\n{text}" for i, text in enumerate(texts))
+        sections.append(f"{heading}\n{body}")
+    return "\n\n".join(sections)
 
 
 def _label_exists(
@@ -102,17 +127,16 @@ def label_clusters(
         if _label_exists(conn, cluster_run_id, cluster_id, config):
             skipped += 1
             continue
-        exemplar_texts = _get_exemplar_texts(conn, cluster_run_id, cluster_id)
+        grouped = _get_exemplar_texts(conn, cluster_run_id, cluster_id)
+        exemplar_sections = _format_exemplar_sections(grouped)
 
-        if not exemplar_texts:
+        if not exemplar_sections:
             skipped += 1
             continue
 
         prompt = _PROMPT_TEMPLATE.format(
             cluster_size=cluster_size,
-            exemplar_texts="\n---\n".join(
-                f"[Exemplar {i+1}]\n{text}" for i, text in enumerate(exemplar_texts)
-            ),
+            exemplar_sections=exemplar_sections,
         )
 
         result = generate_json(

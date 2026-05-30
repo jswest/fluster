@@ -24,6 +24,7 @@ from fluster.config.project import (
     set_active_project,
 )
 from fluster.db.connection import connect
+from fluster.db.schema import apply_schema
 from fluster.jobs.manager import (
     create_job,
     fail_job,
@@ -467,6 +468,8 @@ def cancel(
 def reset():
     """Clear pipeline outputs (embeddings, clusters, etc.) so the next run starts fresh."""
     with _open_project() as (project_path, conn):
+        # Listed child-first so each table's rows are gone before its parent is
+        # dropped (DROP does an implicit DELETE under foreign_keys=ON).
         tables = [
             "cluster_run_critiques",
             "cluster_summaries",
@@ -479,8 +482,13 @@ def reset():
             "embeddings",
             "representations",
         ]
+        # DROP rather than DELETE so schema changes to these derived tables are
+        # picked up: apply_schema recreates them with the current DDL. (The
+        # vec_embeddings virtual table is recreated by embed, not apply_schema.)
         for table in tables:
-            conn.execute(f"DELETE FROM {table}")
+            conn.execute(f"DROP TABLE IF EXISTS {table}")
+        conn.commit()
+        apply_schema(conn)
         conn.commit()
         typer.echo("Pipeline outputs cleared. Run 'fluster run' to re-process.")
 

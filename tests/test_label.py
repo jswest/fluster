@@ -198,7 +198,9 @@ def test_label_prompt_includes_exemplars(mock_call, project):
 
     label_clusters(conn, run_id, _llm_config())
 
-    # Check that the prompt sent to the LLM contains exemplar text.
+    # Check that the prompt sent to the LLM contains exemplar text, split into
+    # central and outskirts sections, plus the cluster size.
     prompt_sent = mock_call.call_args_list[0][0][0]
-    assert "Exemplar" in prompt_sent
+    assert "Central example" in prompt_sent
+    assert "Outskirts example" in prompt_sent
     assert "Cluster size:" in prompt_sent
