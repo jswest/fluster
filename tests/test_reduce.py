@@ -207,3 +207,39 @@ def test_reduce_is_deterministic(project):
     for a, b in zip(coords_first, coords_second):
         assert a["item_id"] == b["item_id"]
         assert json.loads(a["coordinates_json"]) == json.loads(b["coordinates_json"])
+
+
+# --- UMAP options (issue #8) ---
+
+
+def test_reduce_umap_custom_options_stored(project):
+    pdir, conn = project
+    _setup_items(pdir, conn)
+
+    plan = Plan(reductions=[
+        UMAPReduction(target_dimensions=2, n_neighbors=10, min_dist=0.3),
+    ])
+    reduce_items(conn, plan)
+
+    umap = conn.execute(
+        "SELECT params_json FROM reductions WHERE method = 'umap'"
+    ).fetchone()
+    params = json.loads(umap["params_json"])
+    assert params["n_neighbors"] == 10
+    assert params["min_dist"] == 0.3
+
+
+def test_reduce_umap_caps_n_neighbors(project):
+    pdir, conn = project
+    _setup_items(pdir, conn, count=5)
+
+    plan = Plan(reductions=[
+        UMAPReduction(target_dimensions=2, n_neighbors=100),
+    ])
+    reduce_items(conn, plan)
+
+    umap = conn.execute(
+        "SELECT params_json FROM reductions WHERE method = 'umap'"
+    ).fetchone()
+    params = json.loads(umap["params_json"])
+    assert params["n_neighbors"] == 4  # capped at n_samples - 1

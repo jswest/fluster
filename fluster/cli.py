@@ -13,7 +13,7 @@ from rich.table import Table
 
 from fluster import __version__
 from fluster.config import settings
-from fluster.config.plan import load_plan, save_plan, Plan, LLMProvider
+from fluster.config.plan import load_plan, save_plan, Plan, LLMProvider, UMAPReduction
 from fluster.config.project import (
     create_project,
     delete_project,
@@ -260,6 +260,36 @@ def plan_cmd():
 
         cluster.method = method_choice
 
+        # UMAP reduction options. n_neighbors and min_dist are shared across all
+        # UMAP reductions; target_dimensions is prompted per reduction since the
+        # 2D (visualization) and higher-D (clustering) reductions differ.
+        umap_reductions = [r for r in plan.reductions if isinstance(r, UMAPReduction)]
+        if umap_reductions:
+            n_neighbors = typer.prompt(
+                "UMAP n_neighbors", default=umap_reductions[0].n_neighbors, type=int,
+            )
+            if n_neighbors < 2:
+                console.print("[red]n_neighbors must be >= 2.[/red]")
+                raise typer.Exit(code=1)
+
+            min_dist = typer.prompt(
+                "UMAP min_dist", default=umap_reductions[0].min_dist, type=float,
+            )
+            if not 0.0 <= min_dist < 1.0:
+                console.print("[red]min_dist must be in [0.0, 1.0).[/red]")
+                raise typer.Exit(code=1)
+
+            for reduction in umap_reductions:
+                reduction.n_neighbors = n_neighbors
+                reduction.min_dist = min_dist
+                reduction.target_dimensions = typer.prompt(
+                    f"UMAP target_dimensions for the {reduction.target_dimensions}D reduction",
+                    default=reduction.target_dimensions, type=int,
+                )
+                if reduction.target_dimensions < 2:
+                    console.print("[red]target_dimensions must be >= 2.[/red]")
+                    raise typer.Exit(code=1)
+
         caption = plan.images.caption
         caption = typer.confirm("Caption images with FastVLM?", default=caption)
         plan.images.caption = caption
@@ -269,6 +299,13 @@ def plan_cmd():
         console.print(f"  LLM:        {plan.llm.provider.value} / {plan.llm.model}")
         params_str = ", ".join(f"{k}={v}" for k, v in cluster.params.items())
         console.print(f"  Clustering:  method={cluster.method}, {params_str}")
+        if umap_reductions:
+            dims = ", ".join(f"{r.target_dimensions}D" for r in umap_reductions)
+            u = umap_reductions[0]
+            console.print(
+                f"  UMAP:        n_neighbors={u.n_neighbors}, "
+                f"min_dist={u.min_dist}, dimensions=[{dims}]"
+            )
         console.print(f"  Images:      caption={'on' if caption else 'off'}")
 
 

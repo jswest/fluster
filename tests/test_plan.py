@@ -131,3 +131,23 @@ def test_custom_clustering_params():
     )
     assert config.params["min_cluster_size"] == 10
     assert config.params["min_samples"] == 3
+
+
+# --- UMAP options (issue #8) ---
+
+
+def test_umap_default_options():
+    umap = Plan().reductions[1]
+    assert isinstance(umap, UMAPReduction)
+    assert umap.n_neighbors == 15
+    assert umap.min_dist == 0.1
+
+
+def test_umap_options_roundtrip(tmp_path):
+    plan = Plan()
+    plan.reductions = [UMAPReduction(target_dimensions=2, n_neighbors=30, min_dist=0.25)]
+    path = tmp_path / "plan.yaml"
+    save_plan(plan, path)
+    loaded = load_plan(path)
+    assert loaded.reductions[0].n_neighbors == 30
+    assert loaded.reductions[0].min_dist == 0.25

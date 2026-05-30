@@ -106,7 +106,7 @@ fluster init my-project
 # Set up your API key (stored in ~/.fluster/secrets.yaml)
 fluster config
 
-# Tweak the plan if you want (embedding model, LLM, clustering params)
+# Tweak the plan if you want (embedding model, LLM, UMAP + clustering params)
 fluster plan
 
 # Ingest a CSV — file_path column is optional

@@ -145,3 +145,22 @@ def test_delete_aborted(named_project):
     result = runner.invoke(app, ["delete", "test-proj"], input="n\n")
     assert result.exit_code == 1  # typer.confirm(abort=True) exits with 1
     assert project_exists("test-proj")
+
+
+# --- fluster plan: UMAP options (issue #8) ---
+
+
+def test_plan_sets_umap_options(named_project):
+    from fluster.config.plan import load_plan
+
+    # Prompt order: provider, model, method, 4 hdbscan params,
+    # UMAP n_neighbors, UMAP min_dist, target_dims x2, caption confirm.
+    inp = "\n\n\n\n\n\n\n25\n0.2\n\n\ny\n"
+    result = runner.invoke(app, ["plan"], input=inp)
+    assert result.exit_code == 0, result.output
+
+    plan = load_plan(project_dir(named_project) / settings.PLAN_YAML)
+    umaps = [r for r in plan.reductions if r.method == "umap"]
+    assert umaps
+    assert all(r.n_neighbors == 25 for r in umaps)
+    assert all(r.min_dist == 0.2 for r in umaps)
