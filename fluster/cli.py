@@ -13,7 +13,15 @@ from rich.table import Table
 
 from fluster import __version__
 from fluster.config import settings
-from fluster.config.plan import load_plan, save_plan, Plan, LLMProvider, UMAPReduction
+from fluster.config.plan import (
+    ClusteringConfig,
+    load_plan,
+    save_plan,
+    Plan,
+    LLMProvider,
+    SOMReduction,
+    UMAPReduction,
+)
 from fluster.config.project import (
     create_project,
     delete_project,
@@ -177,6 +185,26 @@ def config():
     console.print(f"Saved to {settings.SECRETS_FILE}")
 
 
+def _prompt_optional_grid(label: str, current: int | None) -> int | None:
+    """Prompt for a SOM grid dimension; blank input means auto-size (None)."""
+    answer = typer.prompt(
+        f"{label} (blank to auto-size)",
+        default="" if current is None else str(current),
+        show_default=current is not None,
+    ).strip()
+    if not answer:
+        return None
+    try:
+        value = int(answer)
+    except ValueError:
+        console.print(f"[red]{label} must be an integer or blank.[/red]")
+        raise typer.Exit(code=1)
+    if value < 1:
+        console.print(f"[red]{label} must be >= 1.[/red]")
+        raise typer.Exit(code=1)
+    return value
+
+
 @app.command(name="plan")
 def plan_cmd():
     """Interactively edit the clustering plan for the active project."""
@@ -193,7 +221,12 @@ def plan_cmd():
             "LLM model", default=plan.llm.model,
         )
 
-        cluster = plan.clustering[0]
+        # Edit the coordinate-clustering pass; any SOM codebook pass is handled
+        # separately below so the two never clobber each other.
+        cluster = next(
+            (c for c in plan.clustering if c.target == "coordinates"),
+            plan.clustering[0],
+        )
 
         method_choice = typer.prompt(
             "Clustering method (hdbscan/agglomerative)", default=cluster.method,
@@ -292,6 +325,80 @@ def plan_cmd():
                     console.print("[red]target_dimensions must be >= 2.[/red]")
                     raise typer.Exit(code=1)
 
+        # SOM grid reduction (opt-in). Adding a SOM also unlocks two-level
+        # "codebook" clustering, where the grid's nodes are clustered and each
+        # node's cluster propagates to the items whose best-matching unit it is.
+        som = next((r for r in plan.reductions if isinstance(r, SOMReduction)), None)
+        codebook = next((c for c in plan.clustering if c.target == "codebook"), None)
+        if typer.confirm("Add a SOM grid reduction?", default=som is not None):
+            if som is None:
+                som = SOMReduction()
+                plan.reductions.append(som)
+
+            som.grid_x = _prompt_optional_grid("SOM grid_x", som.grid_x)
+            som.grid_y = _prompt_optional_grid("SOM grid_y", som.grid_y)
+
+            som.sigma = typer.prompt("SOM sigma", default=som.sigma, type=float)
+            if som.sigma <= 0.0:
+                console.print("[red]sigma must be > 0.[/red]")
+                raise typer.Exit(code=1)
+
+            som.learning_rate = typer.prompt(
+                "SOM learning_rate", default=som.learning_rate, type=float,
+            )
+            if som.learning_rate <= 0.0:
+                console.print("[red]learning_rate must be > 0.[/red]")
+                raise typer.Exit(code=1)
+
+            som.num_iteration = typer.prompt(
+                "SOM num_iteration", default=som.num_iteration, type=int,
+            )
+            if som.num_iteration < 1:
+                console.print("[red]num_iteration must be >= 1.[/red]")
+                raise typer.Exit(code=1)
+
+            if typer.confirm(
+                "Also cluster the SOM codebook (two-level SOM)?",
+                default=codebook is not None,
+            ):
+                if codebook is None:
+                    codebook = ClusteringConfig(
+                        method="agglomerative", reduction="som_2d", target="codebook",
+                    )
+                    plan.clustering.append(codebook)
+                # Normalize the reference even on the edit path so a hand-edited
+                # plan can't carry a stale reduction past the wizard.
+                codebook.reduction = "som_2d"
+
+                n_clusters = typer.prompt(
+                    "Codebook number of clusters",
+                    default=codebook.params.get("n_clusters", 8), type=int,
+                )
+                if n_clusters < 2:
+                    console.print("[red]n_clusters must be >= 2.[/red]")
+                    raise typer.Exit(code=1)
+
+                linkage = typer.prompt(
+                    "Codebook linkage (ward/complete/average/single)",
+                    default=codebook.params.get("linkage", "ward"),
+                ).strip().lower()
+                if linkage not in ("ward", "complete", "average", "single"):
+                    console.print(f"[red]Invalid linkage '{linkage}'.[/red]")
+                    raise typer.Exit(code=1)
+
+                codebook.params = {"n_clusters": n_clusters, "linkage": linkage}
+            elif codebook is not None:
+                plan.clustering.remove(codebook)
+                codebook = None
+        else:
+            # No SOM: drop the reduction and any codebook pass (it needs a SOM).
+            if som is not None:
+                plan.reductions.remove(som)
+                som = None
+            if codebook is not None:
+                plan.clustering.remove(codebook)
+                codebook = None
+
         caption = plan.images.caption
         caption = typer.confirm("Caption images with FastVLM?", default=caption)
         plan.images.caption = caption
@@ -308,6 +415,18 @@ def plan_cmd():
                 f"  UMAP:        n_neighbors={u.n_neighbors}, "
                 f"min_dist={u.min_dist}, dimensions=[{dims}]"
             )
+        if som is not None:
+            grid = (
+                f"{som.grid_x}x{som.grid_y}"
+                if som.grid_x is not None and som.grid_y is not None else "auto"
+            )
+            console.print(
+                f"  SOM:         grid={grid}, sigma={som.sigma}, "
+                f"learning_rate={som.learning_rate}, num_iteration={som.num_iteration}"
+            )
+        if codebook is not None:
+            cb_params = ", ".join(f"{k}={v}" for k, v in codebook.params.items())
+            console.print(f"  Codebook:    method={codebook.method}, {cb_params}")
         console.print(f"  Images:      caption={'on' if caption else 'off'}")
 
 

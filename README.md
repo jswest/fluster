@@ -107,7 +107,7 @@ fluster init my-project
 # Set up your API key (stored in ~/.fluster/secrets.yaml)
 fluster config
 
-# Tweak the plan if you want (embedding model, LLM, UMAP + clustering params)
+# Tweak the plan if you want (embedding model, LLM, UMAP + clustering, optional SOM grid)
 fluster plan
 
 # Ingest a CSV — file_path column is optional
@@ -146,8 +146,10 @@ fluster use other-project
 Points-on-a-plane (UMAP) is the default way to look at a run. If you'd rather see
 your data laid out on a tidy grid, `fluster` can also train a [self-organizing
 map](https://en.wikipedia.org/wiki/Self-organizing_map) (SOM). It's **opt-in** —
-nothing changes unless you ask for it — so add it to your `plan.yaml` with
-`fluster plan`:
+nothing changes unless you ask for it. Run `fluster plan` and it'll ask whether
+to add a SOM grid (with grid size, sigma, learning rate, iterations) and whether
+to cluster its codebook; answer no later and it cleans both back out. That writes
+a `plan.yaml` like this:
 
 ```yaml
 reductions:

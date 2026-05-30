@@ -178,9 +178,9 @@ def test_delete_aborted(named_project):
 def test_plan_sets_umap_options(named_project):
     from fluster.config.plan import load_plan
 
-    # Prompt order: provider, model, method, 4 hdbscan params,
-    # UMAP n_neighbors, UMAP min_dist, target_dims x2, caption confirm.
-    inp = "\n\n\n\n\n\n\n25\n0.2\n\n\ny\n"
+    # Prompt order: provider, model, method, 4 hdbscan params, UMAP n_neighbors,
+    # UMAP min_dist, target_dims x2, "Add a SOM?" confirm (n), caption confirm.
+    inp = "\n\n\n\n\n\n\n25\n0.2\n\n\nn\ny\n"
     result = runner.invoke(app, ["plan"], input=inp)
     assert result.exit_code == 0, result.output
 
@@ -189,6 +189,113 @@ def test_plan_sets_umap_options(named_project):
     assert umaps
     assert all(r.n_neighbors == 25 for r in umaps)
     assert all(r.min_dist == 0.2 for r in umaps)
+
+
+# --- fluster plan: SOM reduction + codebook clustering (issue #25) ---
+
+# Shared prefix answering provider..UMAP target_dims (defaults) up to the
+# "Add a SOM grid reduction?" confirm: 11 blank lines.
+_PLAN_PREFIX = "\n" * 11
+
+
+def test_plan_adds_som_reduction(named_project):
+    from fluster.config.plan import SOMReduction, load_plan
+
+    # SOM yes; grid 8x8; sigma/lr default; num_iteration 500; codebook no; caption default.
+    inp = _PLAN_PREFIX + "y\n8\n8\n\n\n500\nn\n\n"
+    result = runner.invoke(app, ["plan"], input=inp)
+    assert result.exit_code == 0, result.output
+
+    plan = load_plan(project_dir(named_project) / settings.PLAN_YAML)
+    soms = [r for r in plan.reductions if isinstance(r, SOMReduction)]
+    assert len(soms) == 1
+    assert soms[0].grid_x == 8 and soms[0].grid_y == 8
+    assert soms[0].num_iteration == 500
+    assert not any(c.target == "codebook" for c in plan.clustering)
+
+
+def test_plan_som_blank_grid_auto_sizes(named_project):
+    from fluster.config.plan import SOMReduction, load_plan
+
+    # SOM yes; both grid dims blank (auto); all else default; codebook no.
+    inp = _PLAN_PREFIX + "y\n\n\n\n\n\nn\n\n"
+    result = runner.invoke(app, ["plan"], input=inp)
+    assert result.exit_code == 0, result.output
+
+    plan = load_plan(project_dir(named_project) / settings.PLAN_YAML)
+    som = next(r for r in plan.reductions if isinstance(r, SOMReduction))
+    assert som.grid_x is None and som.grid_y is None
+
+
+def test_plan_adds_codebook_clustering(named_project):
+    from fluster.config.plan import load_plan
+
+    # SOM yes (8x8, default sigma/lr, 500 iters); codebook yes (6 clusters, ward).
+    inp = _PLAN_PREFIX + "y\n8\n8\n\n\n500\ny\n6\n\n\n"
+    result = runner.invoke(app, ["plan"], input=inp)
+    assert result.exit_code == 0, result.output
+
+    plan = load_plan(project_dir(named_project) / settings.PLAN_YAML)
+    codebook = [c for c in plan.clustering if c.target == "codebook"]
+    assert len(codebook) == 1
+    assert codebook[0].reduction == "som_2d"
+    assert codebook[0].method == "agglomerative"
+    assert codebook[0].params == {"n_clusters": 6, "linkage": "ward"}
+    # The coordinate clustering pass is left intact.
+    assert any(c.target == "coordinates" for c in plan.clustering)
+
+
+def test_plan_edits_existing_som_in_place(named_project):
+    from fluster.config.plan import Plan, SOMReduction, load_plan, save_plan
+
+    # Seed a plan that already has a SOM, then edit it: the wizard must mutate the
+    # existing reduction (changing num_iteration 500 -> 750), not append a second.
+    plan_path = project_dir(named_project) / settings.PLAN_YAML
+    seeded = Plan()
+    seeded.reductions.append(SOMReduction(grid_x=8, grid_y=8, num_iteration=500))
+    save_plan(seeded, plan_path)
+
+    # SOM confirm defaults to yes (one exists); keep grid/sigma/lr, set iters 750.
+    inp = _PLAN_PREFIX + "\n\n\n\n\n750\nn\n\n"
+    result = runner.invoke(app, ["plan"], input=inp)
+    assert result.exit_code == 0, result.output
+
+    plan = load_plan(plan_path)
+    soms = [r for r in plan.reductions if isinstance(r, SOMReduction)]
+    assert len(soms) == 1
+    assert soms[0].grid_x == 8 and soms[0].grid_y == 8
+    assert soms[0].num_iteration == 750
+
+
+def test_plan_declining_som_removes_existing(named_project):
+    from fluster.config.plan import (
+        ClusteringConfig,
+        Plan,
+        SOMReduction,
+        load_plan,
+        save_plan,
+    )
+
+    # Seed a plan that already has a SOM reduction and a codebook clustering pass.
+    plan_path = project_dir(named_project) / settings.PLAN_YAML
+    seeded = Plan()
+    seeded.reductions.append(SOMReduction(grid_x=8, grid_y=8))
+    seeded.clustering.append(
+        ClusteringConfig(
+            method="agglomerative", reduction="som_2d", target="codebook",
+            params={"n_clusters": 6, "linkage": "ward"},
+        )
+    )
+    save_plan(seeded, plan_path)
+
+    # Decline the SOM; both the reduction and the codebook pass should be dropped.
+    inp = _PLAN_PREFIX + "n\n\n"
+    result = runner.invoke(app, ["plan"], input=inp)
+    assert result.exit_code == 0, result.output
+
+    plan = load_plan(plan_path)
+    assert not any(isinstance(r, SOMReduction) for r in plan.reductions)
+    assert not any(c.target == "codebook" for c in plan.clustering)
 
 
 # --- fluster chill ---
