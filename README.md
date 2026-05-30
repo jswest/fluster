@@ -123,7 +123,7 @@ fluster logs
 # Export results
 fluster export --cluster-run 1 -o results.csv
 
-# Launch the visualization UI
+# Launch the visualization UI (auto-rebuilds the client when it's out of date; --no-rebuild to skip)
 fluster chill
 
 # Cancel a stuck job (--force for orphaned jobs)
