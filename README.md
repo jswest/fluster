@@ -11,6 +11,7 @@
 - Cluster (HDBSCAN or agglomerative — on coordinates or a SOM codebook)
 - Select exemplars from each cluster's core and outskirts
 - Label clusters with an LLM (BYO)
+- Reconcile labels across the whole run for consistency
 - Critique the clustering run
 - Keep an auditable trail of every step
 
@@ -112,7 +113,7 @@ fluster plan
 # Ingest a CSV — file_path column is optional
 fluster ingest-rows data.csv
 
-# Run the full pipeline (materialize → embed → reduce → cluster → exemplars → label → critique)
+# Run the full pipeline (materialize → embed → reduce → cluster → exemplars → label → reconcile → critique)
 fluster run
 
 # Check on jobs and logs
