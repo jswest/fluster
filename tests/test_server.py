@@ -193,3 +193,36 @@ def test_get_cluster_run_detail(client, named_project):
     assert len(data["labels"]) == 1
     assert data["labels"][0]["label"] == "Test Cluster"
     assert data["critique"]["verdict"] == "Good."
+
+
+# --- DELETE /cluster-runs/{id} ---
+
+
+def test_delete_cluster_run(client, named_project):
+    conn = connect(project_dir(named_project))
+    conn.execute(
+        "INSERT INTO reductions (embedding_reference, method, target_dimensions) "
+        "VALUES ('test', 'umap', 8)"
+    )
+    reduction_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.execute(
+        "INSERT INTO cluster_runs (reduction_id, method, params_json) "
+        "VALUES (?, 'hdbscan', '{}')",
+        (reduction_id,),
+    )
+    run_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.commit()
+    conn.close()
+
+    resp = client.delete(f"/cluster-runs/{run_id}")
+    assert resp.status_code == 200
+    assert resp.json()["cluster_run_id"] == run_id
+    assert resp.json()["deleted"]["cluster_runs"] == 1
+
+    # The run is gone; the detail endpoint now 404s.
+    assert client.get(f"/cluster-runs/{run_id}").status_code == 404
+
+
+def test_delete_cluster_run_not_found(client):
+    resp = client.delete("/cluster-runs/9999")
+    assert resp.status_code == 404

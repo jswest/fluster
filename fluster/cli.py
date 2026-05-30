@@ -24,6 +24,7 @@ from fluster.config.project import (
     set_active_project,
 )
 from fluster.db.connection import connect
+from fluster.db.delete_run import delete_cluster_run
 from fluster.db.schema import apply_schema
 from fluster.jobs.manager import (
     create_job,
@@ -492,6 +493,33 @@ def reset():
         apply_schema(conn)
         conn.commit()
         typer.echo("Pipeline outputs cleared. Run 'fluster run' to re-process.")
+
+
+@app.command(name="delete-run")
+def delete_run(
+    cluster_run_id: int = typer.Argument(help="Cluster run ID to delete."),
+    force: bool = typer.Option(False, "--force", help="Skip the confirmation prompt."),
+):
+    """Delete a single cluster run and its labels, exemplars, and critiques.
+
+    Unlike 'reset', this leaves embeddings and reductions intact, so you can
+    prune an orphaned run without forcing a re-embed.
+    """
+    with _open_project() as (_project_path, conn):
+        if not force:
+            typer.confirm(
+                f"Delete cluster run {cluster_run_id} and all its labels, "
+                "exemplars, and critiques?",
+                abort=True,
+            )
+        try:
+            summary = delete_cluster_run(conn, cluster_run_id)
+        except ValueError as exc:
+            logger.error(str(exc))
+            raise typer.Exit(code=1)
+
+        total = sum(summary["deleted"].values())
+        logger.info(f"Deleted cluster run {cluster_run_id} ({total} rows).")
 
 
 @app.command()

@@ -161,6 +161,49 @@ def test_delete_happy_path(named_project):
     assert not project_exists("test-proj")
 
 
+# --- fluster delete-run ---
+
+
+def _seed_cli_run(named_project):
+    """Insert a reduction + cluster run; return the new cluster_run_id."""
+    conn = connect(project_dir(named_project))
+    conn.execute(
+        "INSERT INTO reductions (embedding_reference, method, target_dimensions) "
+        "VALUES ('test', 'umap', 8)"
+    )
+    conn.execute(
+        "INSERT INTO cluster_runs (reduction_id, method, params_json) "
+        "VALUES (1, 'hdbscan', '{}')"
+    )
+    conn.commit()
+    run_id = conn.execute("SELECT cluster_run_id FROM cluster_runs").fetchone()[0]
+    conn.close()
+    return run_id
+
+
+def test_delete_run_happy_path(named_project):
+    run_id = _seed_cli_run(named_project)
+    result = runner.invoke(app, ["delete-run", str(run_id)], input="y\n")
+    assert result.exit_code == 0
+    conn = connect(project_dir(named_project))
+    assert conn.execute("SELECT COUNT(*) FROM cluster_runs").fetchone()[0] == 0
+    conn.close()
+
+
+def test_delete_run_aborted_keeps_run(named_project):
+    run_id = _seed_cli_run(named_project)
+    result = runner.invoke(app, ["delete-run", str(run_id)], input="n\n")
+    assert result.exit_code == 1
+    conn = connect(project_dir(named_project))
+    assert conn.execute("SELECT COUNT(*) FROM cluster_runs").fetchone()[0] == 1
+    conn.close()
+
+
+def test_delete_run_not_found(named_project):
+    result = runner.invoke(app, ["delete-run", "9999", "--force"])
+    assert result.exit_code == 1
+
+
 def test_delete_nonexistent_project(named_project):
     result = runner.invoke(app, ["delete", "ghost"])
     assert result.exit_code == 1
