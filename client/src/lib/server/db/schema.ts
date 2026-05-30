@@ -137,6 +137,8 @@ export const clusterSummaries = sqliteTable("cluster_summaries", {
 	clusterSummaryId: integer("cluster_summary_id").primaryKey({ autoIncrement: true }),
 	clusterRunId: integer("cluster_run_id").notNull().references(() => clusterRuns.clusterRunId),
 	clusterId: integer("cluster_id").notNull(),
+	provider: text().notNull(),
+	model: text().notNull(),
 	label: text().notNull(),
 	labelJson: text("label_json").notNull(),
 	createdAt: text("created_at").default(sql`(datetime('now'))`).notNull(),
