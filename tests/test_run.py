@@ -25,21 +25,6 @@ def plan(named_project):
     return load_plan(project_dir(named_project) / settings.PLAN_YAML)
 
 
-def _seed_cluster_run(conn, count=1):
-    """Create fake reduction + cluster_run rows."""
-    for _ in range(count):
-        cur = conn.execute(
-            "INSERT INTO reductions (embedding_reference, method, target_dimensions) "
-            "VALUES ('test', 'umap', 8)"
-        )
-        conn.execute(
-            "INSERT INTO cluster_runs (reduction_id, method, params_json) "
-            "VALUES (?, 'hdbscan', '{}')",
-            (cur.lastrowid,),
-        )
-    conn.commit()
-
-
 _PIPELINE = "fluster.pipeline.run"
 
 
@@ -49,7 +34,7 @@ _PIPELINE = "fluster.pipeline.run"
 @patch(f"{_PIPELINE}.critique_clusters", return_value={"critiqued": True, "skipped": False})
 @patch(f"{_PIPELINE}.label_clusters", return_value={"labeled": 2, "skipped": 0})
 @patch(f"{_PIPELINE}.select_exemplars", return_value={"exemplars_created": 6, "skipped": 0})
-@patch(f"{_PIPELINE}.cluster_items", return_value={"runs_created": 1, "skipped": 0})
+@patch(f"{_PIPELINE}.cluster_items", return_value={"runs_created": 1, "skipped": 0, "cluster_run_ids": [1]})
 @patch(f"{_PIPELINE}.reduce_items", return_value={"reductions_created": 2, "skipped": 0})
 @patch(f"{_PIPELINE}.embed_items", return_value={"embedded": 10, "total": 10})
 @patch(f"{_PIPELINE}.materialize_items", return_value={"materialized": 10, "skipped": 0})
@@ -57,7 +42,6 @@ def test_happy_path(
     mock_mat, mock_emb, mock_red, mock_clu, mock_exe, mock_lab, mock_cri,
     conn, plan,
 ):
-    _seed_cluster_run(conn, count=1)
     job_id = create_job(conn, "full_run")
     start_job(conn, job_id)
 
@@ -80,7 +64,7 @@ def test_happy_path(
 @patch(f"{_PIPELINE}.critique_clusters")
 @patch(f"{_PIPELINE}.label_clusters")
 @patch(f"{_PIPELINE}.select_exemplars")
-@patch(f"{_PIPELINE}.cluster_items", return_value={"runs_created": 1, "skipped": 0})
+@patch(f"{_PIPELINE}.cluster_items", return_value={"runs_created": 1, "skipped": 0, "cluster_run_ids": [1]})
 @patch(f"{_PIPELINE}.reduce_items", return_value={"reductions_created": 2, "skipped": 0})
 @patch(f"{_PIPELINE}.embed_items", return_value={"embedded": 10, "total": 10})
 @patch(f"{_PIPELINE}.materialize_items", return_value={"materialized": 10, "skipped": 0})
@@ -92,7 +76,6 @@ def test_cancellation_stops_pipeline(
     # Cancel after embed (second cancel check).
     mock_cancel.side_effect = [False, True]
 
-    _seed_cluster_run(conn, count=1)
     job_id = create_job(conn, "full_run")
     start_job(conn, job_id)
 
@@ -113,7 +96,7 @@ def test_cancellation_stops_pipeline(
 @patch(f"{_PIPELINE}.critique_clusters", return_value={"critiqued": True, "skipped": False})
 @patch(f"{_PIPELINE}.label_clusters", return_value={"labeled": 2, "skipped": 0})
 @patch(f"{_PIPELINE}.select_exemplars", return_value={"exemplars_created": 6, "skipped": 0})
-@patch(f"{_PIPELINE}.cluster_items", return_value={"runs_created": 2, "skipped": 0})
+@patch(f"{_PIPELINE}.cluster_items", return_value={"runs_created": 2, "skipped": 0, "cluster_run_ids": [1, 2]})
 @patch(f"{_PIPELINE}.reduce_items", return_value={"reductions_created": 2, "skipped": 0})
 @patch(f"{_PIPELINE}.embed_items", return_value={"embedded": 10, "total": 10})
 @patch(f"{_PIPELINE}.materialize_items", return_value={"materialized": 10, "skipped": 0})
@@ -121,7 +104,6 @@ def test_multiple_cluster_runs(
     mock_mat, mock_emb, mock_red, mock_clu, mock_exe, mock_lab, mock_cri,
     conn, plan,
 ):
-    _seed_cluster_run(conn, count=2)
     job_id = create_job(conn, "full_run")
     start_job(conn, job_id)
 
@@ -139,7 +121,7 @@ def test_multiple_cluster_runs(
 @patch(f"{_PIPELINE}.critique_clusters", return_value={"critiqued": True, "skipped": False})
 @patch(f"{_PIPELINE}.label_clusters", return_value={"labeled": 2, "skipped": 0})
 @patch(f"{_PIPELINE}.select_exemplars", return_value={"exemplars_created": 6, "skipped": 0})
-@patch(f"{_PIPELINE}.cluster_items", return_value={"runs_created": 1, "skipped": 0})
+@patch(f"{_PIPELINE}.cluster_items", return_value={"runs_created": 1, "skipped": 0, "cluster_run_ids": [1]})
 @patch(f"{_PIPELINE}.reduce_items", return_value={"reductions_created": 2, "skipped": 0})
 @patch(f"{_PIPELINE}.embed_items", return_value={"embedded": 10, "total": 10})
 @patch(f"{_PIPELINE}.materialize_items", return_value={"materialized": 10, "skipped": 0})
@@ -147,7 +129,6 @@ def test_progress_updated(
     mock_mat, mock_emb, mock_red, mock_clu, mock_exe, mock_lab, mock_cri,
     conn, plan,
 ):
-    _seed_cluster_run(conn, count=1)
     job_id = create_job(conn, "full_run")
     start_job(conn, job_id)
 
@@ -165,7 +146,7 @@ def test_progress_updated(
 @patch(f"{_PIPELINE}.critique_clusters", return_value={"critiqued": True, "skipped": False})
 @patch(f"{_PIPELINE}.label_clusters", return_value={"labeled": 2, "skipped": 0})
 @patch(f"{_PIPELINE}.select_exemplars", return_value={"exemplars_created": 6, "skipped": 0})
-@patch(f"{_PIPELINE}.cluster_items", return_value={"runs_created": 1, "skipped": 0})
+@patch(f"{_PIPELINE}.cluster_items", return_value={"runs_created": 1, "skipped": 0, "cluster_run_ids": [1]})
 @patch(f"{_PIPELINE}.reduce_items", return_value={"reductions_created": 2, "skipped": 0})
 @patch(f"{_PIPELINE}.embed_items", return_value={"embedded": 10, "total": 10})
 @patch(f"{_PIPELINE}.materialize_items", return_value={"materialized": 10, "skipped": 0})
@@ -173,7 +154,6 @@ def test_embed_receives_job_id(
     mock_mat, mock_emb, mock_red, mock_clu, mock_exe, mock_lab, mock_cri,
     conn, plan,
 ):
-    _seed_cluster_run(conn, count=1)
     job_id = create_job(conn, "full_run")
     start_job(conn, job_id)
 

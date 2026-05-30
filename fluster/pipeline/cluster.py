@@ -49,16 +49,16 @@ def load_coordinates(
     return item_ids, coords
 
 
-def _cluster_run_exists(
+def _find_cluster_run_id(
     conn: sqlite3.Connection, reduction_id: int, method: str, params: dict
-) -> bool:
-    """Check if a cluster run with these exact params already exists."""
+) -> int | None:
+    """Return the id of a cluster run with these exact params, or None."""
     row = conn.execute(
-        "SELECT 1 FROM cluster_runs "
+        "SELECT cluster_run_id FROM cluster_runs "
         "WHERE reduction_id = ? AND method = ? AND params_json = ?",
         (reduction_id, method, json.dumps(params, sort_keys=True)),
     ).fetchone()
-    return row is not None
+    return row["cluster_run_id"] if row else None
 
 
 def cluster_items(
@@ -71,10 +71,14 @@ def cluster_items(
     (e.g. 'umap_8d') and HDBSCAN params. Idempotent — skips runs
     that already exist with identical params.
 
-    Returns a summary dict.
+    Returns a summary dict, including ``cluster_run_ids`` — the ids of every
+    run this plan defines (newly created or already present). Callers use this
+    to scope downstream steps to the active plan rather than every run in the
+    database.
     """
     created = 0
     skipped = 0
+    cluster_run_ids: list[int] = []
 
     for cluster_config in plan.clustering:
         method_name, target_dims = _parse_reduction_ref(cluster_config.reduction)
@@ -89,8 +93,13 @@ def cluster_items(
         reduction_id = reduction["reduction_id"]
         params = cluster_config.params
 
-        if _cluster_run_exists(conn, reduction_id, cluster_config.method, params):
+        existing_id = _find_cluster_run_id(
+            conn, reduction_id, cluster_config.method, params
+        )
+        if existing_id is not None:
             skipped += 1
+            if existing_id not in cluster_run_ids:
+                cluster_run_ids.append(existing_id)
             continue
 
         item_ids, coords = load_coordinates(conn, reduction_id)
@@ -140,9 +149,11 @@ def cluster_items(
 
         conn.commit()
 
+        cluster_run_ids.append(cluster_run_id)
         created += 1
 
     return {
         "runs_created": created,
         "skipped": skipped,
+        "cluster_run_ids": cluster_run_ids,
     }
