@@ -29,13 +29,6 @@ def _check_cancel(conn: sqlite3.Connection, job_id: int) -> None:
         raise PipelineCancelled(job_id)
 
 
-def _get_all_cluster_run_ids(conn: sqlite3.Connection) -> list[int]:
-    rows = conn.execute(
-        "SELECT cluster_run_id FROM cluster_runs ORDER BY cluster_run_id"
-    ).fetchall()
-    return [r["cluster_run_id"] for r in rows]
-
-
 def run_pipeline(
     conn: sqlite3.Connection,
     project_path: Path,
@@ -88,7 +81,10 @@ def run_pipeline(
     result = cluster_items(conn, plan)
     log_job(conn, job_id, "cluster_items complete", payload=result)
 
-    cluster_run_ids = _get_all_cluster_run_ids(conn)
+    # Scope the post-cluster steps to the runs this plan defines, not every
+    # run ever stored — otherwise orphaned runs from past plan edits get
+    # re-labeled/critiqued on every invocation (see issue #22).
+    cluster_run_ids = result["cluster_run_ids"]
     total_steps = 4 + 4 * len(cluster_run_ids)
     _step("cluster")
     _check_cancel(conn, job_id)

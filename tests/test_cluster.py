@@ -243,3 +243,73 @@ def test_agglomerative_is_idempotent(project):
 
     count = conn.execute("SELECT COUNT(*) FROM cluster_runs").fetchone()[0]
     assert count == 1
+
+
+# --- Scoping to the active plan (issue #22) ---
+
+def test_cluster_returns_created_run_id(project):
+    pdir, conn = project
+    _setup_clusterable(pdir, conn)
+
+    summary = cluster_items(conn, Plan())
+
+    run_id = conn.execute(
+        "SELECT cluster_run_id FROM cluster_runs"
+    ).fetchone()["cluster_run_id"]
+    assert summary["cluster_run_ids"] == [run_id]
+
+
+def test_cluster_idempotent_returns_existing_run_id(project):
+    pdir, conn = project
+    _setup_clusterable(pdir, conn)
+
+    first = cluster_items(conn, Plan())
+    second = cluster_items(conn, Plan())
+
+    assert second["runs_created"] == 0
+    assert second["skipped"] == 1
+    # An idempotent re-run still reports the run so downstream steps target it.
+    assert second["cluster_run_ids"] == first["cluster_run_ids"]
+
+
+def test_cluster_dedups_duplicate_configs(project):
+    """A plan listing the same clustering config twice yields one run id."""
+    pdir, conn = project
+    _setup_clusterable(pdir, conn)
+
+    plan = Plan(clustering=[
+        ClusteringConfig(params={"min_cluster_size": 5}),
+        ClusteringConfig(params={"min_cluster_size": 5}),
+    ])
+    summary = cluster_items(conn, plan)
+    assert len(summary["cluster_run_ids"]) == 1
+
+
+def test_cluster_scopes_to_current_plan_excluding_orphans(project):
+    """Switching the plan's clustering must leave the old run out of scope.
+
+    Regression for issue #22: cluster_items must return only the runs the
+    active plan defines, so the post-cluster loop never re-labels an orphan.
+    """
+    pdir, conn = project
+    _setup_clusterable(pdir, conn)
+
+    # The first plan creates an agglomerative run...
+    cluster_items(conn, _agglomerative_plan())
+    orphan_id = conn.execute(
+        "SELECT cluster_run_id FROM cluster_runs"
+    ).fetchone()["cluster_run_id"]
+
+    # ...then the plan switches to hdbscan.
+    summary = cluster_items(conn, Plan())
+
+    all_ids = [
+        r["cluster_run_id"]
+        for r in conn.execute("SELECT cluster_run_id FROM cluster_runs").fetchall()
+    ]
+    # Append-only: the orphaned run still exists in the table...
+    assert orphan_id in all_ids
+    assert len(all_ids) == 2
+    # ...but the current plan only reports its own (hdbscan) run.
+    assert orphan_id not in summary["cluster_run_ids"]
+    assert summary["cluster_run_ids"] == [rid for rid in all_ids if rid != orphan_id]

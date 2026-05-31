@@ -125,6 +125,11 @@ fluster logs
 # (non-destructive — the source run is left untouched). --force to redo.
 fluster merge --cluster-run 1
 
+# Prune a single stale or orphaned cluster run and its labels, exemplars, and
+# critiques. Leaves embeddings + reductions intact (unlike a full reset), so
+# you don't pay to re-embed. --force to skip the confirmation prompt.
+fluster delete-run 1
+
 # Export results
 fluster export --cluster-run 1 -o results.csv
 

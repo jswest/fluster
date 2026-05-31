@@ -12,6 +12,7 @@ from fluster.config import settings
 from fluster.config.plan import load_plan
 from fluster.config.project import project_dir, project_exists
 from fluster.db.connection import connect
+from fluster.db.delete_run import delete_cluster_run
 from fluster.jobs.manager import create_job, get_active_job, get_job, request_cancel
 from fluster.pipeline.merge import merge_clusters
 
@@ -92,6 +93,11 @@ class MergeResponse(BaseModel):
     merges: list[dict] = Field(default_factory=list)
     skipped: bool
     reason: str | None = None
+
+
+class DeleteRunResponse(BaseModel):
+    cluster_run_id: int
+    deleted: dict[str, int]  # table name -> rows removed
 
 
 # ---------------------------------------------------------------------------
@@ -274,6 +280,18 @@ def get_cluster_run(
         labels=labels,
         critique=critique,
     )
+
+
+@router.delete("/cluster-runs/{cluster_run_id}")
+def delete_cluster_run_endpoint(
+    cluster_run_id: int,
+    conn: sqlite3.Connection = Depends(get_conn),
+) -> DeleteRunResponse:
+    try:
+        summary = delete_cluster_run(conn, cluster_run_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return DeleteRunResponse(**summary)
 
 
 @router.post("/cluster-runs/{cluster_run_id}/merge")
